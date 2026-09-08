@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block title %}提交实验结果 - {{ experiment.experiment_name }} - WebSecLab{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{{ url_for('main.index') }}">首页</a></li>
+        <li class="breadcrumb-item"><a href="{{ url_for('exp.exp_list') }}">我的实验</a></li>
+        <li class="breadcrumb-item"><a href="{{ url_for('exp.exp_detail', experiment_id=experiment.id) }}">{{ experiment.experiment_name }}</a></li>
+        <li class="breadcrumb-item active">提交结果</li>
+    </ol>
+</nav>
+
+<h2 class="mb-4"><i class="bi bi-check-circle"></i> 提交实验结果</h2>
+
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card shadow-sm">
+            <div class="card-header bg-dark text-white">
+                实验: {{ experiment.experiment_name }} | Token: {{ experiment.token }}
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('exp.exp_complete', experiment_id=experiment.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="mb-3">
+                        <label for="status" class="form-label">实验结论</label>
+                        <select id="status" name="status" class="form-select">
+                            <option value="success">成功 - 漏洞验证成功</option>
+                            <option value="failed">失败 - 漏洞利用失败</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="result" class="form-label">实验结果描述</label>
+                        <textarea class="form-control" id="result" name="result" rows="6"
+                                  placeholder="描述你的实验过程、发现和结论..."></textarea>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-success">
+                            <i class="bi bi-check-lg"></i> 提交结果
+                        </button>
+                        <a href="{{ url_for('exp.exp_detail', experiment_id=experiment.id) }}" class="btn btn-outline-secondary">取消</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

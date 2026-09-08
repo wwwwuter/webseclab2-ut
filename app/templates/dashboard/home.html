@@ -1,0 +1,308 @@
+{% extends "base.html" %}
+
+{% block page_title %}安全实验态势中心{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+{% endblock %}
+
+{% block content %}
+{# ============ 未登录态: 仅展示 模块①系统状态 + 模块②快捷操作 + 欢迎 ============ #}
+{% if not current_user.is_authenticated %}
+<div class="welcome-banner mb-4">
+    <div class="row align-items-center">
+        <div class="col-lg-8">
+            <h2 class="fw-bold mb-2"><i class="bi bi-shield-lock text-primary"></i> WebSecLab · AI 驱动的网络安全实验平台</h2>
+            <p class="text-muted mb-3">围绕「实验 → 扫描 → AI分析 → 风险评估 → 报告」完整业务闭环，3 秒内掌握平台状态并一键进入实战。</p>
+            <div class="d-flex gap-2 flex-wrap">
+                <a href="{{ url_for('auth.login') }}" class="btn btn-primary"><i class="bi bi-box-arrow-in-right"></i> 登录</a>
+                <a href="{{ url_for('auth.register') }}" class="btn btn-outline-secondary"><i class="bi bi-person-plus"></i> 注册</a>
+            </div>
+        </div>
+        <div class="col-lg-4 text-lg-end">
+            <div class="welcome-stat">
+                <span class="num">{{ overview.experiment_count }}</span><span class="lbl">实验</span>
+            </div>
+            <div class="welcome-stat">
+                <span class="num">{{ overview.scan_count }}</span><span class="lbl">扫描</span>
+            </div>
+            <div class="welcome-stat">
+                <span class="num">{{ overview.ai_count }}</span><span class="lbl">AI分析</span>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{# ============ 模块① 系统运行状态 ============ #}
+<section class="mb-4">
+    <div class="section-head">
+        <h5 class="mb-0"><i class="bi bi-activity text-primary"></i> 系统运行状态</h5>
+        <span class="auto-refresh-hint" id="statusRefreshHint"><i class="bi bi-arrow-repeat"></i> 每 30 秒自动刷新</span>
+    </div>
+    <div class="row g-3" id="systemStatusRow">
+        {% for s in system_status %}
+        <div class="col-6 col-md-4 col-lg-2-4">
+            <div class="status-card status-{{ s.status }}" data-key="{{ s.key }}">
+                <span class="status-dot"></span>
+                <div class="status-name">{{ s.name }}</div>
+                <div class="status-detail">{{ s.detail }}</div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+
+{# ============ 模块② 快捷操作 ============ #}
+<section class="mb-4">
+    <div class="section-head"><h5 class="mb-0"><i class="bi bi-lightning-charge text-primary"></i> 快捷操作</h5></div>
+    <div class="row g-3">
+        <div class="col-6 col-md-4 col-lg-2-4">
+            <a class="quick-btn" href="{{ url_for('exp.exp_create') }}">
+                <span class="qi" style="background:rgba(59,130,246,.12);color:#3b82f6"><i class="bi bi-flask"></i></span>
+                <span class="qt">开始漏洞实验</span>
+            </a>
+        </div>
+        <div class="col-6 col-md-4 col-lg-2-4">
+            <a class="quick-btn" href="{{ url_for('scan.scan_create') }}">
+                <span class="qi" style="background:rgba(6,182,212,.12);color:#06b6d4"><i class="bi bi-radar"></i></span>
+                <span class="qt">开始端口扫描</span>
+            </a>
+        </div>
+        <div class="col-6 col-md-4 col-lg-2-4">
+            <a class="quick-btn" href="{{ url_for('ai.ai_custom') }}">
+                <span class="qi" style="background:rgba(168,85,247,.12);color:#a855f7"><i class="bi bi-robot"></i></span>
+                <span class="qt">AI 漏洞分析</span>
+            </a>
+        </div>
+        <div class="col-6 col-md-4 col-lg-2-4">
+            <a class="quick-btn" href="{{ url_for('report.report_list') }}">
+                <span class="qi" style="background:rgba(234,179,8,.14);color:#ca8a04"><i class="bi bi-file-earmark-pdf"></i></span>
+                <span class="qt">生成实验报告</span>
+            </a>
+        </div>
+        <div class="col-6 col-md-4 col-lg-2-4">
+            <a class="quick-btn" href="{{ url_for('vuln.vuln_list') }}">
+                <span class="qi" style="background:rgba(34,197,94,.12);color:#16a34a"><i class="bi bi-book"></i></span>
+                <span class="qt">浏览漏洞知识库</span>
+            </a>
+        </div>
+    </div>
+</section>
+
+{# ============ 登录态: 模块③~⑨ + 管理员面板 ============ #}
+{% if current_user.is_authenticated and home %}
+{% set m = home.core_metrics %}
+{% set copilot = home.ai_copilot %}
+{% set reco = home.recommendation %}
+
+{# 模块③ 核心指标 #}
+<section class="mb-4">
+    <div class="section-head"><h5 class="mb-0"><i class="bi bi-speedometer2 text-primary"></i> 核心指标</h5></div>
+    <div class="row g-3">
+        <div class="col-6 col-lg-2-4">
+            <div class="kpi-card"><div class="kpi-ico" style="background:rgba(59,130,246,.12);color:#3b82f6"><i class="bi bi-flask"></i></div>
+                <div class="kpi-num">{{ m.experiment_count }}</div><div class="kpi-lbl">实验</div></div>
+        </div>
+        <div class="col-6 col-lg-2-4">
+            <div class="kpi-card"><div class="kpi-ico" style="background:rgba(6,182,212,.12);color:#06b6d4"><i class="bi bi-radar"></i></div>
+                <div class="kpi-num">{{ m.scan_count }}</div><div class="kpi-lbl">扫描任务</div></div>
+        </div>
+        <div class="col-6 col-lg-2-4">
+            <div class="kpi-card"><div class="kpi-ico" style="background:rgba(168,85,247,.12);color:#a855f7"><i class="bi bi-robot"></i></div>
+                <div class="kpi-num">{{ m.ai_count }}</div><div class="kpi-lbl">AI 分析</div></div>
+        </div>
+        <div class="col-6 col-lg-2-4">
+            <div class="kpi-card"><div class="kpi-ico" style="background:rgba(234,179,8,.14);color:#ca8a04"><i class="bi bi-file-earmark-pdf"></i></div>
+                <div class="kpi-num">{{ m.report_count }}</div><div class="kpi-lbl">报告</div></div>
+        </div>
+        <div class="col-6 col-lg-2-4">
+            <div class="kpi-card risk-{{ m.risk_level|lower }}">
+                <div class="kpi-ico" style="background:rgba(220,38,38,.12);color:#dc2626"><i class="bi bi-shield-exclamation"></i></div>
+                <div class="kpi-num">{{ m.risk_score }}</div>
+                <div class="kpi-lbl">风险评分 · {{ m.risk_level }}</div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<div class="row g-4">
+    <div class="col-lg-6">
+        {# 模块④ AI 安全助手 #}
+        <div class="card h-100 dash-card">
+            <div class="card-header d-flex align-items-center gap-2"><i class="bi bi-robot text-primary"></i> AI 安全助手</div>
+            <div class="card-body">
+                <div class="row text-center g-2 mb-3">
+                    <div class="col-6">
+                        <div class="ai-stat"><div class="ai-num">{{ copilot.today_count }}</div><div class="ai-lbl">今日分析</div></div>
+                    </div>
+                    <div class="col-6">
+                        <div class="ai-stat"><div class="ai-num text-danger">{{ copilot.found_vulns }}</div><div class="ai-lbl">发现漏洞</div></div>
+                    </div>
+                </div>
+                <div class="ai-advice">
+                    <div class="ai-advice-row"><span class="tag">建议</span> {{ copilot.suggestion }}</div>
+                    <div class="ai-advice-row"><span class="tag tag-cyan">下一步</span> {{ copilot.next_step }}</div>
+                </div>
+                <div class="d-flex gap-2 mt-3">
+                    <a href="{{ url_for('ai.ai_custom') }}" class="btn btn-primary btn-sm flex-fill"><i class="bi bi-play-fill"></i> 开始 AI 分析</a>
+                    <a href="{{ url_for('ai.ai_history') }}" class="btn btn-outline-secondary btn-sm flex-fill"><i class="bi bi-bar-chart"></i> 查看分析报告</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        {# 模块⑤ 我的实验 #}
+        <div class="card h-100 dash-card">
+            <div class="card-header d-flex align-items-center justify-content-between">
+                <span><i class="bi bi-clipboard-data text-primary"></i> 我的实验</span>
+                <a href="{{ url_for('exp.exp_list') }}" class="small text-decoration-none">全部 <i class="bi bi-chevron-right"></i></a>
+            </div>
+            <div class="card-body py-2">
+                {% if home.my_experiments %}
+                {% for e in home.my_experiments %}
+                <a href="{{ url_for('exp.exp_detail', experiment_id=e.id) }}" class="exp-row exp-row-clickable">
+                    <div class="exp-row-head">
+                        <span class="exp-name">{{ e.name }}</span>
+                        <span class="badge bg-{{ e.status_badge }}">{{ e.status_label }}</span>
+                    </div>
+                    <div class="exp-meta">漏洞类型：{{ e.vuln_name }}
+                        <span class="sev sev-{{ e.vuln_severity|lower }}">{{ e.vuln_severity }}</span>
+                    </div>
+                    <div class="progress exp-progress">
+                        <div class="progress-bar bg-{{ 'success' if e.progress==100 else ('primary' if e.progress>0 else 'secondary') }}"
+                             style="width:{{ e.progress }}%"></div>
+                    </div>
+                    <div class="exp-actions" onclick="event.stopPropagation()">
+                        <span class="btn btn-sm btn-outline-primary">继续实验</span>
+                        <span class="btn btn-sm btn-link text-decoration-none">查看详情</span>
+                    </div>
+                </a>
+                {% endfor %}
+                {% else %}
+                <div class="empty-hint">还没有实验，<a href="{{ url_for('exp.exp_create') }}">开始第一个漏洞实验 →</a></div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4 mt-0">
+    <div class="col-lg-8">
+        {# 模块⑥ 风险趋势 #}
+        <div class="card dash-card">
+            <div class="card-header d-flex align-items-center gap-2"><i class="bi bi-graph-up-arrow text-primary"></i> 风险趋势 · 最近 7 天</div>
+            <div class="card-body"><div id="trendChart" style="height:300px"></div></div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        {# 模块⑦ 漏洞风险分布 #}
+        <div class="card dash-card">
+            <div class="card-header d-flex align-items-center gap-2"><i class="bi bi-pie-chart text-primary"></i> 漏洞风险分布</div>
+            <div class="card-body"><div id="riskChart" style="height:300px"></div></div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-6">
+        {# 模块⑧ 最近活动 #}
+        <div class="card dash-card">
+            <div class="card-header d-flex align-items-center gap-2"><i class="bi bi-clock-history text-primary"></i> 最近活动</div>
+            <div class="card-body">
+                <ul class="exp-timeline mb-0">
+                    {% for a in home.activity %}
+                    <li class="tl-item">
+                        <div class="d-flex justify-content-between">
+                            <a href="{{ a.link }}" class="tl-title text-decoration-none">{{ a.title }}</a>
+                            <span class="tl-time">{{ a.time.strftime('%m-%d %H:%M') if a.time else '' }}</span>
+                        </div>
+                        <span class="badge bg-{{ a.status_badge }} mt-1">{{ a.status_label }}</span>
+                    </li>
+                    {% else %}
+                    <li class="tl-item"><span class="tl-title text-muted">暂无活动</span></li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        {# 模块⑨ 今日推荐 #}
+        <div class="card dash-card h-100">
+            <div class="card-header d-flex align-items-center gap-2"><i class="bi bi-stars text-primary"></i> 今日推荐</div>
+            <div class="card-body">
+                {% if reco %}
+                <div class="reco-name">{{ reco.name }}
+                    <span class="sev sev-{{ reco.severity|lower }}">{{ reco.severity }}</span>
+                </div>
+                <div class="reco-meta">
+                    <span><i class="bi bi-clock"></i> 学习时间 {{ reco.study_time }} 分钟</span>
+                    <span><i class="bi bi-bar-chart"></i> 难度
+                        {% for i in range(5) %}<i class="bi bi-star{{ '-fill' if i < reco.difficulty else '' }} text-warning"></i>{% endfor %}
+                    </span>
+                </div>
+                <div class="reco-owasp"><i class="bi bi-tag"></i> 关联：{{ reco.owasp }}</div>
+                <a href="{{ url_for('exp.exp_create') }}" class="btn btn-primary w-100 mt-3"><i class="bi bi-play-fill"></i> 开始实验</a>
+                {% else %}
+                <div class="empty-hint">暂无可推荐实验。</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{# 管理员折叠面板 #}
+{% if current_user.is_admin() and admin_summary %}
+<div class="mt-4">
+    <a class="admin-toggle" data-bs-toggle="collapse" href="#adminPanel" role="button" aria-expanded="false" aria-controls="adminPanel">
+        <i class="bi bi-gear-fill text-danger"></i> 管理员面板 · 系统概览 <i class="bi bi-chevron-down"></i>
+    </a>
+    <div class="collapse" id="adminPanel">
+        <div class="card dash-card mt-2">
+            <div class="card-body">
+                <div class="row g-3 text-center">
+                    <div class="col-6 col-md-3"><div class="kpi-num sm">{{ admin_summary.user_count }}</div><div class="kpi-lbl">用户数量</div></div>
+                    <div class="col-6 col-md-3"><div class="kpi-num sm">{{ admin_summary.new_experiments_today }}</div><div class="kpi-lbl">今日新增实验</div></div>
+                    <div class="col-6 col-md-3"><div class="kpi-num sm">{{ admin_summary.ai_calls }}</div><div class="kpi-lbl">AI 调用次数</div></div>
+                    <div class="col-6 col-md-3"><div class="kpi-num sm">{{ admin_summary.prompt_count }}</div><div class="kpi-lbl">Prompt 数量</div></div>
+                </div>
+                <div class="section-head mt-3 mb-2"><h6 class="mb-0"><i class="bi bi-list-ul"></i> 系统日志</h6></div>
+                <ul class="exp-timeline mb-0">
+                    {% for lg in admin_summary.recent_logs %}
+                    <li class="tl-item">
+                        <div class="d-flex justify-content-between">
+                            <a href="{{ lg.link }}" class="tl-title text-decoration-none">{{ lg.title }}</a>
+                            <span class="tl-time">{{ lg.time.strftime('%m-%d %H:%M') if lg.time else '' }}</span>
+                        </div>
+                        <span class="badge bg-{{ lg.status_badge }} mt-1">{{ lg.status_label }}</span>
+                    </li>
+                    {% else %}
+                    <li class="tl-item"><span class="tl-title text-muted">暂无日志</span></li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+{# 后端聚合数据注入 (供 dashboard.js 初始化图表/轮询) #}
+<script>
+  window.HOME_DATA = {{ (home | tojson) if home else 'null' }};
+  window.SYSTEM_STATUS = {{ system_status | tojson }};
+  window.ADMIN_SUMMARY = {{ (admin_summary | tojson) if admin_summary else 'null' }};
+</script>
+<script src="{{ url_for('static', filename='vendor/echarts.min.js') }}"></script>
+<script>
+  if (typeof echarts === 'undefined') {
+    document.write('<scr' + 'ipt src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"><\/scr' + 'ipt>');
+  }
+</script>
+<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+{% endblock %}

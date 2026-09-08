@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block title %}用户详情 - WebSecLab{% endblock %}
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{{ url_for('dashboard.security_dashboard') }}">Dashboard</a></li>
+        <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard_users') }}">用户下钻</a></li>
+        <li class="breadcrumb-item active">{{ target_user.username }}</li>
+    </ol>
+</nav>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-person-badge"></i> 用户: {{ target_user.username }}</h2>
+    <a href="{{ url_for('dashboard.dashboard_users') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left"></i> 返回排行
+    </a>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="card text-center border-primary">
+            <div class="card-body py-3">
+                <i class="bi bi-flask fs-4 text-primary"></i>
+                <h3 class="mt-1">{{ data.user_stats.experiment_count }}</h3>
+                <small class="text-muted">实验</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center border-warning">
+            <div class="card-body py-3">
+                <i class="bi bi-radar fs-4 text-warning"></i>
+                <h3 class="mt-1">{{ data.user_stats.scan_count }}</h3>
+                <small class="text-muted">扫描任务</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center border-info">
+            <div class="card-body py-3">
+                <i class="bi bi-robot fs-4 text-info"></i>
+                <h3 class="mt-1">{{ data.user_stats.ai_count }}</h3>
+                <small class="text-muted">AI分析</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center border-success">
+            <div class="card-body py-3">
+                <i class="bi bi-file-earmark-pdf fs-4 text-success"></i>
+                <h3 class="mt-1">{{ data.user_stats.report_count }}</h3>
+                <small class="text-muted">报告</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3 mb-3">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header"><h6 class="mb-0">实验完成情况</h6></div>
+            <div class="card-body">
+                <div class="d-flex justify-content-between mb-1"><span>成功</span><strong class="text-success">{{ data.experiment_stats.success }}</strong></div>
+                <div class="d-flex justify-content-between mb-1"><span>失败</span><strong class="text-danger">{{ data.experiment_stats.failed }}</strong></div>
+                <div class="d-flex justify-content-between mb-1"><span>进行中</span><strong class="text-primary">{{ data.experiment_stats.running }}</strong></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header"><h6 class="mb-0">扫描统计</h6></div>
+            <div class="card-body">
+                <div class="d-flex justify-content-between mb-1"><span>总任务</span><strong>{{ data.scan_stats.total }}</strong></div>
+                <div class="d-flex justify-content-between mb-1"><span>已完成</span><strong class="text-success">{{ data.scan_stats.completed }}</strong></div>
+                <div class="d-flex justify-content-between mb-1"><span>开放端口</span><strong class="text-warning">{{ data.scan_stats.open_ports }}</strong></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header"><h6 class="mb-0">AI分析</h6></div>
+            <div class="card-body">
+                <div class="d-flex justify-content-between mb-1"><span>总分析</span><strong>{{ data.ai_stats.total }}</strong></div>
+                <div class="d-flex justify-content-between mb-1"><span>已完成</span><strong class="text-success">{{ data.ai_stats.completed }}</strong></div>
+                <div class="d-flex justify-content-between mb-1"><span>报告数</span><strong>{{ data.report_stats.generated }}</strong></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header"><h6 class="mb-0">实验状态分布</h6></div>
+            <div class="card-body"><div id="expChart" style="height:300px;"></div></div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header"><h6 class="mb-0">AI 判定风险等级</h6></div>
+            <div class="card-body">
+                <div class="small text-muted mb-2">数据来源：AI 分析报告（含 Info 级，共 5 级）</div>
+                <div id="riskChart" style="height:300px;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='vendor/echarts.min.js') }}"></script>
+<script>
+  if (typeof echarts === 'undefined') {
+    document.write('<scr' + 'ipt src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"><\/scr' + 'ipt>');
+  }
+</script>
+<script>
+var expData = [{% for e in data.experiment_status_chart %}{value: {{ e.count }}, name: '{{ e.name }}'}{% if not loop.last %},{% endif %}{% endfor %}];
+var expChart = echarts.init(document.getElementById('expChart'));
+expChart.setOption({ tooltip: {trigger: 'item'}, legend: {bottom: 0},
+  series: [{type: 'pie', radius: '60%', data: expData,
+    color: ['#6c757d','#0d6efd','#198754','#dc3545','#adb5bd'], label: {formatter: '{b}: {c}'}}] });
+
+var riskData = [{% for r in data.risk_distribution %}{value: {{ r.count }}, name: '{{ r.name }}'}{% if not loop.last %},{% endif %}{% endfor %}];
+var riskChart = echarts.init(document.getElementById('riskChart'));
+riskChart.setOption({ tooltip: {trigger: 'item'}, legend: {bottom: 0},
+  series: [{type: 'pie', radius: '60%', data: riskData,
+    color: ['#212529','#dc3545','#ffc107','#0dcaf0','#6c757d'], label: {formatter: '{b}: {c}'}}] });
+
+window.addEventListener('resize', function() { expChart.resize(); riskChart.resize(); });
+</script>
+{% endblock %}

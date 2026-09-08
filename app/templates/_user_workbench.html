@@ -1,0 +1,226 @@
+<!--
+  个人工作台 partial — 由 dashboard.html 抽出, 供首页 (已登录态) include 复用。
+  使用变量 `data` (即 DashboardService.get_user_dashboard 的返回值, 已并入 activity)。
+  该 partial 同时承担原 /dashboard「用户中心」的全部功能, 合并进首页后不再单独存在。
+-->
+<!-- echarts 本地化: 优先本地静态文件, 加载失败再回退 CDN -->
+<script src="{{ url_for('static', filename='vendor/echarts.min.js') }}"></script>
+<script>
+  if (typeof echarts === 'undefined') {
+    document.write('<scr' + 'ipt src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"><\/scr' + 'ipt>');
+  }
+</script>
+
+<style>
+.user-stat-card { transition: transform 0.15s; }
+.user-stat-card:hover { transform: translateY(-3px); }
+.timeline-icon { width: 34px; height: 34px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; }
+</style>
+
+<!-- 头部 -->
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <div>
+        <h2 class="mb-0"><i class="bi bi-speedometer2"></i> 个人工作台</h2>
+        <p class="text-muted mb-0">{{ current_user.username }} · {% if current_user.is_admin() %}管理员{% else %}普通用户{% endif %}</p>
+    </div>
+    <a href="{{ url_for('dashboard.security_dashboard') }}" class="btn btn-outline-primary">
+        <i class="bi bi-graph-up"></i> 安全态势看板
+    </a>
+</div>
+
+<!-- 个人统计卡 -->
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-4 col-lg-2">
+        <div class="card text-center shadow-sm h-100 user-stat-card border-primary">
+            <div class="card-body">
+                <i class="bi bi-terminal display-6 text-primary"></i>
+                <h3 class="mt-2 mb-0">{{ data.user_stats.experiment_count }}</h3>
+                <small class="text-muted">我的实验</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-4 col-lg-2">
+        <div class="card text-center shadow-sm h-100 user-stat-card border-warning">
+            <div class="card-body">
+                <i class="bi bi-radar display-6 text-warning"></i>
+                <h3 class="mt-2 mb-0">{{ data.user_stats.scan_count }}</h3>
+                <small class="text-muted">我的扫描</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-4 col-lg-2">
+        <div class="card text-center shadow-sm h-100 user-stat-card border-danger">
+            <div class="card-body">
+                <i class="bi bi-robot display-6 text-danger"></i>
+                <h3 class="mt-2 mb-0">{{ data.user_stats.ai_count }}</h3>
+                <small class="text-muted">AI 分析</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-4 col-lg-2">
+        <div class="card text-center shadow-sm h-100 user-stat-card border-info">
+            <div class="card-body">
+                <i class="bi bi-file-earmark-text display-6 text-info"></i>
+                <h3 class="mt-2 mb-0">{{ data.user_stats.report_count }}</h3>
+                <small class="text-muted">实验报告</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-4 col-lg-2">
+        <div class="card text-center shadow-sm h-100 user-stat-card border-secondary">
+            <div class="card-body">
+                <i class="bi bi-shield-check display-6 text-secondary"></i>
+                <h3 class="mt-2 mb-0">{{ data.risk_stats.total }}</h3>
+                <small class="text-muted">风险评估</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-4 col-lg-2">
+        <div class="card text-center shadow-sm h-100 user-stat-card border-dark">
+            <div class="card-body">
+                <i class="bi bi-speedometer2 display-6 text-dark"></i>
+                <h3 class="mt-2 mb-0">{{ data.risk_stats.avg_score }}</h3>
+                <small class="text-muted">平均风险分</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 详细信息 + 图表 -->
+<div class="row g-3 mb-4">
+    <!-- 实验/扫描/AI 明细 -->
+    <div class="col-md-4">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-light"><i class="bi bi-bar-chart"></i> 我的数据明细</div>
+            <div class="card-body">
+                <h6 class="text-muted">实验</h6>
+                <div class="d-flex justify-content-between mb-1"><span>成功</span><strong class="text-success">{{ data.experiment_stats.success }}</strong></div>
+                <div class="d-flex justify-content-between mb-1"><span>失败</span><strong class="text-danger">{{ data.experiment_stats.failed }}</strong></div>
+                <div class="d-flex justify-content-between mb-3"><span>进行中</span><strong class="text-primary">{{ data.experiment_stats.running }}</strong></div>
+
+                <h6 class="text-muted">扫描</h6>
+                <div class="d-flex justify-content-between mb-1"><span>已完成</span><strong class="text-success">{{ data.scan_stats.completed }}</strong></div>
+                <div class="d-flex justify-content-between mb-3"><span>开放端口</span><strong class="text-warning">{{ data.scan_stats.open_ports }}</strong></div>
+
+                <h6 class="text-muted">AI 分析</h6>
+                <div class="d-flex justify-content-between mb-1"><span>已完成</span><strong class="text-success">{{ data.ai_stats.completed }}</strong></div>
+                <div class="d-flex justify-content-between"><span>报告</span><strong class="text-info">{{ data.report_stats.generated }}</strong></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 实验状态分布 -->
+    <div class="col-md-4">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-light"><i class="bi bi-pie-chart"></i> 实验状态分布</div>
+            <div class="card-body position-relative">
+                <div id="expChart" style="height:260px;"></div>
+                <div class="chart-empty text-muted text-center position-absolute top-50 start-0 end-0" style="display:none;">暂无数据</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 风险评分等级分布 -->
+    <div class="col-md-4">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-light"><i class="bi bi-shield-exclamation"></i> 风险评分等级</div>
+            <div class="card-body position-relative">
+                <div id="riskScoreChart" style="height:260px;"></div>
+                <div class="chart-empty text-muted text-center position-absolute top-50 start-0 end-0" style="display:none;">暂无数据</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 最近活动 + 快捷操作 -->
+<div class="row g-3">
+    <div class="col-md-8">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-light"><i class="bi bi-activity"></i> 最近活动</div>
+            <div class="card-body">
+                {% if data.activity %}
+                <div class="list-group list-group-flush">
+                    {% for ev in data.activity %}
+                    <div class="list-group-item d-flex justify-content-between align-items-center px-0">
+                        <div class="d-flex align-items-center">
+                            <span class="timeline-icon me-3 bg-{% if ev.type == 'scan' %}warning{% elif ev.type == 'experiment' %}success{% else %}danger{% endif %} bg-opacity-10">
+                                <i class="bi bi-{% if ev.type == 'scan' %}radar{% elif ev.type == 'experiment' %}terminal{% else %}robot{% endif %} text-{% if ev.type == 'scan' %}warning{% elif ev.type == 'experiment' %}success{% else %}danger{% endif %}"></i>
+                            </span>
+                            <a href="{{ ev.link }}" class="text-decoration-none">{{ ev.title }}</a>
+                        </div>
+                        <div>
+                            <span class="badge bg-{{ ev.status_badge }} me-2">{{ ev.status_label }}</span>
+                            <small class="text-muted">{{ ev.time.strftime('%m-%d %H:%M') if ev.time else '' }}</small>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-muted mb-0">暂无活动记录，去创建一个实验或发起一次扫描吧。</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-light"><i class="bi bi-lightning"></i> 快捷操作</div>
+            <div class="card-body d-grid gap-2">
+                <a href="{{ url_for('vuln.vuln_list') }}" class="btn btn-outline-primary text-start">
+                    <i class="bi bi-book"></i> 浏览漏洞库
+                </a>
+                <a href="{{ url_for('exp.exp_create') }}" class="btn btn-outline-success text-start">
+                    <i class="bi bi-plus-circle"></i> 新建实验
+                </a>
+                <a href="{{ url_for('scan.scan_create') }}" class="btn btn-outline-warning text-start">
+                    <i class="bi bi-radar"></i> 发起扫描
+                </a>
+                <a href="{{ url_for('ai.ai_custom') }}" class="btn btn-outline-danger text-start">
+                    <i class="bi bi-robot"></i> AI 分析
+                </a>
+                <a href="{{ url_for('report.report_list') }}" class="btn btn-outline-info text-start">
+                    <i class="bi bi-file-earmark-text"></i> 实验报告
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// 实验状态饼图
+var expData = [{% for e in data.experiment_status_chart %}{value: {{ e.count }}, name: '{{ e.name }}'}{% if not loop.last %},{% endif %}{% endfor %}];
+var expChart = echarts.init(document.getElementById('expChart'));
+expChart.setOption({
+    tooltip: { trigger: 'item' },
+    legend: { bottom: 0 },
+    series: [{ type: 'pie', radius: '60%', data: expData,
+        color: ['#0d6efd','#198754','#dc3545'],
+        label: { formatter: '{b}: {c}' } }]
+});
+
+// 风险评分等级饼图
+var riskScoreData = [{% for r in data.risk_score_distribution %}{value: {{ r.count }}, name: '{{ r.name }}'}{% if not loop.last %},{% endif %}{% endfor %}];
+var riskScoreChart = echarts.init(document.getElementById('riskScoreChart'));
+riskScoreChart.setOption({
+    tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
+    legend: { bottom: 0 },
+    series: [{ type: 'pie', radius: ['40%','65%'], data: riskScoreData,
+        color: ['#212529','#dc3545','#ffc107','#0dcaf0'],
+        label: { formatter: '{b}\n{c}次 ({d}%)' } }]
+});
+
+window.addEventListener('resize', function() {
+    expChart.resize(); riskScoreChart.resize();
+});
+
+// 空数据占位
+function sumCounts(data) { var s = 0; (data||[]).forEach(function(d){ s += (d.value||0); }); return s; }
+function checkEmpty(id, hasData) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    var empty = el.parentNode.querySelector('.chart-empty');
+    if (empty) empty.style.display = hasData ? 'none' : 'block';
+}
+checkEmpty('expChart', sumCounts(expData) > 0);
+checkEmpty('riskScoreChart', sumCounts(riskScoreData) > 0);
+</script>

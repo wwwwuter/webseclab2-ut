@@ -1,0 +1,65 @@
+{% if pagination.items %}
+<div class="row">
+    {% for exp in pagination.items %}
+    <div class="col-md-6 mb-3">
+        <div class="card shadow-sm h-100" onclick="location.href='{{ url_for('exp.exp_detail', experiment_id=exp.id) }}'" style="cursor:pointer">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start">
+                    <h5 class="card-title text-decoration-none">{{ exp.experiment_name }}</h5>
+                    <span class="badge bg-{{ exp.status_badge }}">{{ exp.status_label }}</span>
+                </div>
+                <p class="card-text text-muted mb-2">
+                    {% if exp.vulnerability %}
+                    <span class="badge bg-info me-1">{{ exp.vulnerability.name }}</span>
+                    {% endif %}
+                    <span class="badge bg-outline-secondary border border-secondary text-secondary">DVWA: {{ exp.dvwa_level }}</span>
+                </p>
+                <p class="card-text small text-muted">
+                    <i class="bi bi-hash"></i> ID: {{ exp.id }}<br>
+                    <i class="bi bi-key"></i> {{ exp.token }}<br>
+                    <i class="bi bi-clock"></i> {{ exp.created_time.strftime('%Y-%m-%d %H:%M') }}
+                </p>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{% if pagination.pages > 1 %}
+<nav aria-label="分页">
+    <ul class="pagination justify-content-center">
+        <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
+            <a class="page-link"
+               href="{{ url_for('exp.exp_list', page=pagination.prev_num, q=keyword|default(''), status=status|default(''), dvwa_level=dvwa_level|default(''), sort=sort_by|default(''), order=order|default('desc')) }}"
+               hx-get="{{ url_for('exp.exp_list', page=pagination.prev_num, q=keyword|default(''), status=status|default(''), dvwa_level=dvwa_level|default(''), sort=sort_by|default(''), order=order|default('desc')) }}"
+               hx-target="#exp-results" hx-swap="innerHTML" hx-push-url="true">上一页</a>
+        </li>
+        {% for p in pagination.iter_pages() %}
+        {% if p %}
+        <li class="page-item {% if p == pagination.page %}active{% endif %}">
+            <a class="page-link"
+               href="{{ url_for('exp.exp_list', page=p, q=keyword|default(''), status=status|default(''), dvwa_level=dvwa_level|default(''), sort=sort_by|default(''), order=order|default('desc')) }}"
+               hx-get="{{ url_for('exp.exp_list', page=p, q=keyword|default(''), status=status|default(''), dvwa_level=dvwa_level|default(''), sort=sort_by|default(''), order=order|default('desc')) }}"
+               hx-target="#exp-results" hx-swap="innerHTML" hx-push-url="true">{{ p }}</a>
+        </li>
+        {% else %}
+        <li class="page-item disabled"><span class="page-link">...</span></li>
+        {% endif %}
+        {% endfor %}
+        <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+            <a class="page-link"
+               href="{{ url_for('exp.exp_list', page=pagination.next_num, q=keyword|default(''), status=status|default(''), dvwa_level=dvwa_level|default(''), sort=sort_by|default(''), order=order|default('desc')) }}"
+               hx-get="{{ url_for('exp.exp_list', page=pagination.next_num, q=keyword|default(''), status=status|default(''), dvwa_level=dvwa_level|default(''), sort=sort_by|default(''), order=order|default('desc')) }}"
+               hx-target="#exp-results" hx-swap="innerHTML" hx-push-url="true">下一页</a>
+        </li>
+    </ul>
+</nav>
+{% endif %}
+
+{% else %}
+<div class="text-center py-5 text-muted">
+    <i class="bi bi-flask display-1"></i>
+    <p class="mt-3">没有符合条件的实验记录</p>
+    <a href="{{ url_for('exp.exp_create') }}" class="btn btn-primary">创建第一个实验</a>
+</div>
+{% endif %}

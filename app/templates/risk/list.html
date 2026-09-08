@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% block title %}风险评估 - WebSecLab{% endblock %}
+
+{% block content %}
+<!-- echarts 本地化: 优先本地静态文件, 加载失败再回退 CDN -->
+<script src="{{ url_for('static', filename='vendor/echarts.min.js') }}"></script>
+<script>
+  if (typeof echarts === 'undefined') {
+    document.write('<scr' + 'ipt src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"><\/scr' + 'ipt>');
+  }
+</script>
+
+<style>
+.chart-empty {
+    position: absolute;
+    top: 50%; left: 0; right: 0;
+    transform: translateY(-50%);
+    text-align: center;
+    color: #adb5bd;
+    font-size: 14px;
+    pointer-events: none;
+}
+/* 行点击表格: checkbox 列不响应行点击 */
+.risk-row-click-table .row-checkbox-cell {
+    cursor: default !important;
+}
+.btn-batch-delete:not(:disabled):hover {
+    color: #dc3545;
+    border-color: #dc3545;
+}
+</style>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-shield-check"></i> 风险评估</h2>
+    <div class="d-flex gap-2">
+        <form method="POST" action="{{ url_for('risk.batch_assess') }}" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-outline-primary btn-sm">
+                <i class="bi bi-lightning"></i> 批量评估实验
+            </button>
+        </form>
+        {% if current_user.is_admin() %}
+        <a href="{{ url_for('risk.manual_assess') }}" class="btn btn-outline-dark btn-sm">
+            <i class="bi bi-sliders"></i> 手动评估
+        </a>
+        {% endif %}
+    </div>
+</div>
+
+<!-- 风险分布图 + 评分趋势 -->
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div class="card shadow-sm">
+            <div class="card-header"><h6 class="mb-0">风险等级分布</h6></div>
+            <div class="card-body position-relative">
+                <div id="riskPieChart" style="height:250px;"></div>
+                <div class="chart-empty d-none">暂无数据</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-8">
+        <div class="card shadow-sm">
+            <div class="card-header"><h6 class="mb-0">评分趋势 (近30天)</h6></div>
+            <div class="card-body position-relative">
+                <div id="scoreTrendChart" style="height:250px;"></div>
+                <div class="chart-empty d-none">暂无数据</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 评估历史列表 (含统计卡 + 表格 + 批量删除) -->
+<div id="riskListSection">
+    {% include 'risk/_list_section.html' %}
+</div>
+
+<script>
+// ===== 工具函数 =====
+function sumCounts(data) {
+    var s = 0;
+    (data || []).forEach(function(d) { s += (d.value || 0); });
+    return s;
+}
+function checkEmpty(id, hasData) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    var empty = el.parentNode.querySelector('.chart-empty');
+    if (empty) empty.classList.toggle('d-none', !!hasData);
+}
+
+// 风险等级饼图
+var riskData = [{% for d in distribution %}{value: {{ d.count }}, name: '{{ d.name }}'}{% if not loop.last %},{% endif %}{% endfor %}];
+var riskPie = echarts.init(document.getElementById('riskPieChart'));
+riskPie.setOption({
+    tooltip: { trigger: 'item' },
+    legend: { bottom: 0 },
+    series: [{
+        type: 'pie', radius: '55%',
+        data: riskData,
+        color: ['#212529','#dc3545','#ffc107','#0dcaf0'],
+        label: { formatter: '{b}: {c}' }
+    }]
+});
+checkEmpty('riskPieChart', sumCounts(riskData) > 0);
+
+// 评分趋势折线图 (双 y 轴: 左轴平均评分 0~100, 右轴评估数量)
+var trendChart = echarts.init(document.getElementById('scoreTrendChart'));
+trendChart.setOption({
+    tooltip: { trigger: 'axis' },
+    legend: { bottom: 0 },
+    xAxis: { type: 'category', data: [], axisLabel: { rotate: 30, interval: 0, fontSize: 10 } },
+    yAxis: [
+        { type: 'value', name: '平均评分', min: 0, max: 100, position: 'left' },
+        { type: 'value', name: '评估数量', min: 0, position: 'right', splitLine: { show: false } }
+    ],
+    grid: { bottom: 60, left: 50, right: 50 },
+    series: [
+        { name: '平均评分', type: 'line', yAxisIndex: 0, data: [], smooth: true, lineStyle: { width: 3 } },
+        { name: '评估数量', type: 'bar', yAxisIndex: 1, data: [], barWidth: '30%', itemStyle: { opacity: 0.3 } }
+    ]
+});
+// 初始无数据, 先显示占位, fetch 回填后自动隐藏
+checkEmpty('scoreTrendChart', false);
+
+// 加载趋势数据
+fetch('{{ url_for("risk.api_trend") }}')
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+        var dates = d.map(function(i) { return i.date; });
+        var scores = d.map(function(i) { return i.avg_score; });
+        var counts = d.map(function(i) { return i.count; });
+        trendChart.setOption({
+            xAxis: { data: dates },
+            series: [
+                { data: scores },
+                { data: counts }
+            ]
+        });
+        checkEmpty('scoreTrendChart', dates.length > 0);
+    })
+    .catch(function() {});
+
+window.addEventListener('resize', function() {
+    riskPie.resize(); trendChart.resize();
+});
+</script>
+{% endblock %}

@@ -1,0 +1,210 @@
+{% extends "base.html" %}
+{% block title %}报告管理 - WebSecLab{% endblock %}
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2><i class="bi bi-file-earmark-text"></i> 报告管理</h2>
+        </div>
+
+        <!-- 统计卡片 -->
+        <div class="row g-3 mb-3">
+            <div class="col-6 col-lg-3">
+                <div class="card shadow-sm border-0 h-100">
+                    <div class="card-body d-flex align-items-center">
+                        <div class="rounded-circle bg-primary bg-opacity-10 p-3 me-3"><i class="bi bi-files fs-4 text-primary"></i></div>
+                        <div><div class="text-muted small">报告总数</div><div class="fs-4 fw-bold">{{ stats.total }}</div></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-lg-3">
+                <div class="card shadow-sm border-0 h-100">
+                    <div class="card-body d-flex align-items-center">
+                        <div class="rounded-circle bg-info bg-opacity-10 p-3 me-3"><i class="bi bi-file-earmark-pdf fs-4 text-info"></i></div>
+                        <div><div class="text-muted small">实验报告</div><div class="fs-4 fw-bold">{{ stats.experiment }}</div></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-lg-3">
+                <div class="card shadow-sm border-0 h-100">
+                    <div class="card-body d-flex align-items-center">
+                        <div class="rounded-circle bg-success bg-opacity-10 p-3 me-3"><i class="bi bi-diagram-3 fs-4 text-success"></i></div>
+                        <div><div class="text-muted small">图谱快照</div><div class="fs-4 fw-bold">{{ stats.graph_png }}</div></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-lg-3">
+                <div class="card shadow-sm border-0 h-100">
+                    <div class="card-body d-flex align-items-center">
+                        <div class="rounded-circle bg-warning bg-opacity-10 p-3 me-3"><i class="bi bi-robot fs-4 text-warning"></i></div>
+                        <div><div class="text-muted small">MCP 分析</div><div class="fs-4 fw-bold">{{ stats.mcp }}</div></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 筛选 / 搜索 / 排序 -->
+        <form method="GET" action="{{ url_for('report.report_list') }}" class="row g-2 mb-3">
+            <div class="col-12 col-md-3">
+                <select name="type" class="form-select form-select-sm">
+                    <option value="">全部类型</option>
+                    <option value="experiment" {% if report_type == 'experiment' %}selected{% endif %}>实验报告</option>
+                    <option value="mcp_pdf" {% if report_type == 'mcp_pdf' %}selected{% endif %}>MCP-PDF</option>
+                    <option value="mcp_md" {% if report_type == 'mcp_md' %}selected{% endif %}>MCP-Markdown</option>
+                    <option value="mcp_json" {% if report_type == 'mcp_json' %}selected{% endif %}>MCP-JSON</option>
+                    <option value="graph_png" {% if report_type == 'graph_png' %}selected{% endif %}>图谱快照</option>
+                </select>
+            </div>
+            <div class="col-12 col-md-2">
+                <select name="status" class="form-select form-select-sm">
+                    <option value="">全部状态</option>
+                    <option value="generated" {% if status == 'generated' %}selected{% endif %}>已生成</option>
+                    <option value="failed" {% if status == 'failed' %}selected{% endif %}>生成失败</option>
+                </select>
+            </div>
+            <div class="col-12 col-md-5">
+                <input type="text" name="q" value="{{ keyword }}" class="form-control form-control-sm"
+                       placeholder="搜索报告标题...">
+            </div>
+            <div class="col-12 col-md-2">
+                <button type="submit" class="btn btn-sm btn-primary w-100"><i class="bi bi-funnel"></i></button>
+            </div>
+        </form>
+
+        {% if pagination.items %}
+        <div class="card">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>ID</th>
+                            <th>报告标题</th>
+                            <th>类型</th>
+                            <th>来源</th>
+                            <th>
+                                <a href="{{ url_for('report.report_list', type=report_type, status=status, q=keyword, sort='file_size', order=('asc' if sort_by == 'file_size' and order == 'desc' else 'desc'), page=1) }}"
+                                   class="text-decoration-none text-reset" title="点击切换升/降序">
+                                    大小
+                                    {% if sort_by == 'file_size' %}
+                                        <i class="bi bi-caret-{% if order == 'asc' %}up{% else %}down{% endif %}"></i>
+                                    {% else %}
+                                        <i class="bi bi-arrow-down-up opacity-50"></i>
+                                    {% endif %}
+                                </a>
+                            </th>
+                            <th>状态</th>
+                            <th>
+                                <a href="{{ url_for('report.report_list', type=report_type, status=status, q=keyword, sort='created_time', order=('asc' if sort_by == 'created_time' and order == 'desc' else 'desc'), page=1) }}"
+                                   class="text-decoration-none text-reset" title="点击切换升/降序">
+                                    生成时间
+                                    {% if sort_by == 'created_time' %}
+                                        <i class="bi bi-caret-{% if order == 'asc' %}up{% else %}down{% endif %}"></i>
+                                    {% else %}
+                                        <i class="bi bi-arrow-down-up opacity-50"></i>
+                                    {% endif %}
+                                </a>
+                            </th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for r in pagination.items %}
+                        <tr class="cursor-pointer" onclick="window.location='{{ url_for('report.report_detail', report_id=r.id) }}'">
+                            <td>{{ r.id }}</td>
+                            <td>
+                                {% if r.report_type == 'graph_png' and r.status == 'generated' %}
+                                <a href="{{ url_for('report.report_detail', report_id=r.id) }}"
+                                   onclick="event.stopPropagation()">
+                                    <img src="{{ url_for('report.report_download', report_id=r.id) }}"
+                                         class="img-thumbnail me-2" style="max-height:36px;max-width:60px;"
+                                         alt="缩略图">
+                                </a>
+                                {% endif %}
+                                {% if r.report_type == 'mcp_pdf' %}
+                                    <i class="bi bi-file-earmark-pdf text-danger me-1"></i>
+                                {% elif r.report_type == 'mcp_md' %}
+                                    <i class="bi bi-file-earmark-markdown text-info me-1"></i>
+                                {% elif r.report_type == 'mcp_json' %}
+                                    <i class="bi bi-file-earmark-code text-warning me-1"></i>
+                                {% elif r.report_type == 'graph_png' %}
+                                    <i class="bi bi-image text-success me-1"></i>
+                                {% else %}
+                                    <i class="bi bi-file-earmark-pdf text-primary me-1"></i>
+                                {% endif %}
+                                {{ r.title[:40] }}
+                            </td>
+                            <td><span class="badge bg-{{ r.type_badge }}">{{ r.type_label }}</span></td>
+                            <td>
+                                {% if r.experiment %}
+                                    <a href="{{ url_for('exp.exp_detail', experiment_id=r.experiment.id) }}">
+                                        {{ r.experiment.experiment_name[:20] }}
+                                    </a>
+                                {% elif r.is_mcp_report %}
+                                    <span class="text-muted"><i class="bi bi-robot"></i> MCP 分析</span>
+                                {% elif r.report_type == 'graph_png' %}
+                                    <span class="text-muted"><i class="bi bi-diagram-3"></i> 知识图谱</span>
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </td>
+                            <td>{{ r.file_size_kb }} KB</td>
+                            <td><span class="badge bg-{{ r.status_badge }}">{{ r.status_label }}</span></td>
+                            <td>{{ r.created_time.strftime('%Y-%m-%d %H:%M') }}</td>
+                            <td>
+                                {% if r.status == 'generated' %}
+                                <a href="{{ url_for('report.report_download', report_id=r.id) }}"
+                                   class="btn btn-sm btn-outline-success" title="下载 {{ r.file_extension|upper }}"
+                                   onclick="event.stopPropagation()">
+                                    <i class="bi bi-download"></i>
+                                </a>
+                                {% endif %}
+                                <form method="POST" action="{{ url_for('report.report_delete', report_id=r.id) }}" class="d-inline">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="删除"
+                                            onclick="return confirm('确定删除此报告？') || (event.stopPropagation(), false)">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        {% if pagination.pages > 1 %}
+        <nav class="mt-3">
+            <ul class="pagination justify-content-center">
+                {% for p in pagination.iter_pages() %}
+                    {% if p %}
+                        <li class="page-item {{ 'active' if p == pagination.page }}">
+                            <a class="page-link" href="{{ url_for('report.report_list', page=p, type=report_type, status=status, q=keyword, sort=sort_by, order=order) }}">{{ p }}</a>
+                        </li>
+                    {% else %}
+                        <li class="page-item disabled"><span class="page-link">...</span></li>
+                    {% endif %}
+                {% endfor %}
+            </ul>
+        </nav>
+        {% endif %}
+
+        {% else %}
+        <div class="card">
+            <div class="card-body text-center py-5">
+                <i class="bi bi-file-earmark-text display-1 text-muted"></i>
+                <p class="mt-3 text-muted">还没有报告</p>
+                <div class="d-flex justify-content-center gap-2 mt-2">
+                    <a href="{{ url_for('exp.exp_list') }}" class="btn btn-outline-primary btn-sm">
+                        <i class="bi bi-flask"></i> 去实验列表生成报告
+                    </a>
+                    <a href="{{ url_for('kg.graph_view') }}" class="btn btn-outline-success btn-sm">
+                        <i class="bi bi-diagram-3"></i> 去知识图谱导出快照
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

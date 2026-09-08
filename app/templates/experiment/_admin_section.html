@@ -1,0 +1,205 @@
+{# 实验管理 section — 供统一 /admin 页 (embed=true) 与原 admin_list 页 include 共用 #}
+<!-- KRI 指标卡 -->
+<div class="row mb-3">
+    <div class="col-md-3">
+        <div class="card text-center border-primary">
+            <div class="card-body py-2">
+                <h5 class="text-primary mb-0">{{ stats.total }}</h5>
+                <small class="text-muted">实验总数</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center border-primary">
+            <div class="card-body py-2">
+                <h5 class="text-primary mb-0">{{ stats.running }}</h5>
+                <small class="text-muted">进行中</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center border-success">
+            <div class="card-body py-2">
+                <h5 class="text-success mb-0">{{ stats.success_rate }}%</h5>
+                <small class="text-muted">成功率</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center border-info">
+            <div class="card-body py-2">
+                <h5 class="text-info mb-0">{{ stats.recent_7d }}</h5>
+                <small class="text-muted">近 7 天新增</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 图表区: 状态分布 + DVWA 等级占比 -->
+<div class="row mb-4">
+    <div class="col-md-5">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-white fw-medium">实验状态分布</div>
+            <div class="card-body">
+                <div class="position-relative" style="height: 220px;">
+                    {% if stats.total %}
+                    <div id="statusChart" style="height: 220px;"></div>
+                    {% else %}
+                    <div class="text-center text-muted py-5">暂无数据</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-7">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-white fw-medium">DVWA 等级占比</div>
+            <div class="card-body">
+                {% set total = stats.total %}
+                {# 颜色语义反转: low=脆弱(红) → medium(黄) → high(蓝) → impossible=安全到位(绿) #}
+                {% set lv = [('low', stats.low, 'bg-danger'), ('medium', stats.medium, 'bg-warning'), ('high', stats.high, 'bg-info'), ('impossible', stats.impossible, 'bg-success')] %}
+                {% for name, cnt, cls in lv %}
+                {% set pct = (cnt / total * 100)|round|int if total else 0 %}
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between small text-muted mb-1">
+                        <span>{{ name }}</span>
+                        <span>{{ cnt }} ({{ pct }}%)</span>
+                    </div>
+                    <div class="progress" style="height: 10px;">
+                        <div class="progress-bar {{ cls }}" style="width: {{ pct }}%;"></div>
+                    </div>
+                </div>
+                {% endfor %}
+                <p class="text-muted small mt-4 mb-0">
+                    各 DVWA 安全等级的实验数量占比，便于了解训练难度分布。<br>
+                    <i class="bi bi-info-circle"></i> 等级越高 → 防护越强 / 攻击难度越大（impossible 为最安全、不可攻破）。
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 筛选条 (HTMX 局部刷新) -->
+<div class="card shadow-sm mb-3">
+    <div class="card-body">
+        <form id="exp-filter-form"
+              hx-get="{{ url_for('exp.admin_exp_list') }}"
+              hx-target="#admin-exp-results"
+              hx-swap="innerHTML"
+              hx-push-url="{{ 'false' if embed else 'true' }}"
+              hx-indicator="#exp-filter-spinner"
+              hx-trigger="submit, change, keyup changed delay:400ms from:input[name=q]">
+            <div class="row g-2 align-items-end">
+                <div class="col-md-5">
+                    <label class="form-label">搜索</label>
+                    <div class="input-group">
+                        <input type="text" name="q" class="form-control"
+                               placeholder="实验名称 / Token / 用户名..."
+                               value="{{ keyword|default('') }}" autocomplete="off">
+                        <span class="input-group-text htmx-indicator" id="exp-filter-spinner">
+                            <span class="spinner-border spinner-border-sm"></span>
+                        </span>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">状态</label>
+                    <select name="status" class="form-select">
+                        <option value="">全部</option>
+                        <option value="created" {% if status == 'created' %}selected{% endif %}>已创建</option>
+                        <option value="running" {% if status == 'running' %}selected{% endif %}>进行中</option>
+                        <option value="success" {% if status == 'success' %}selected{% endif %}>成功</option>
+                        <option value="failed" {% if status == 'failed' %}selected{% endif %}>失败</option>
+                        <option value="closed" {% if status == 'closed' %}selected{% endif %}>已关闭</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">DVWA 等级</label>
+                    <select name="dvwa_level" class="form-select">
+                        <option value="">全部</option>
+                        {% for lv in dvwa_levels %}
+                        <option value="{{ lv }}" {% if dvwa_level == lv %}selected{% endif %}>{{ lv }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-1 d-flex gap-1">
+                    <button type="submit" class="btn btn-primary w-100" title="搜索">
+                        <i class="bi bi-search"></i>
+                    </button>
+                </div>
+            </div>
+            {% if keyword or status or dvwa_level %}
+            <div class="mt-2">
+                <a href="{{ url_for('exp.admin_exp_list') }}" class="small text-decoration-none">
+                    <i class="bi bi-arrow-counterclockwise"></i> 清除筛选
+                </a>
+            </div>
+            {% endif %}
+        </form>
+    </div>
+</div>
+
+<!-- 结果区 (HTMX 局部刷新目标) -->
+<div id="admin-exp-results">
+    {% include "experiment/_admin_list_results.html" %}
+</div>
+
+<!-- echarts 本地化: 优先本地静态文件, 加载失败再回退 CDN -->
+<script src="{{ url_for('static', filename='vendor/echarts.min.js') }}"></script>
+<script>
+    if (typeof echarts === 'undefined') {
+        document.write('<scr' + 'ipt src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"><\/scr' + 'ipt>');
+    }
+</script>
+<script>
+(function () {
+    function renderStatusChart() {
+        var el = document.getElementById('statusChart');
+        if (!el || typeof echarts === 'undefined') return;
+        if (el._echartsInstance) return el._echartsInstance.resize();
+
+        var chart = echarts.init(el);
+        el._echartsInstance = chart;
+        var option = {
+            tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
+            legend: { bottom: 0, left: 'center', itemWidth: 10, itemHeight: 10, textStyle: { fontSize: 12 } },
+            series: [{
+                name: '实验状态',
+                type: 'pie',
+                radius: ['45%', '70%'],
+                center: ['50%', '45%'],
+                avoidLabelOverlap: true,
+                label: { show: true, formatter: '{c}' },
+                data: [
+                    { value: {{ stats.running }}, name: '进行中', itemStyle: { color: '#0d6efd' } },
+                    { value: {{ stats.success }}, name: '成功', itemStyle: { color: '#198754' } },
+                    { value: {{ stats.failed }}, name: '失败', itemStyle: { color: '#dc3545' } }
+                ]
+            }]
+        };
+        chart.setOption(option);
+        window.addEventListener('resize', function () { chart.resize(); });
+    }
+
+    {% if embed %}
+    var tabEl = document.querySelector('[data-bs-target="#tab-exp"]');
+    if (tabEl) {
+        tabEl.addEventListener('shown.bs.tab', renderStatusChart, { once: true });
+    } else {
+        document.addEventListener('DOMContentLoaded', renderStatusChart);
+    }
+    {% else %}
+    document.addEventListener('DOMContentLoaded', renderStatusChart);
+    {% endif %}
+})();
+</script>
+
+<script>
+// 行点击进入详情 (点击链接/按钮/表单 不触发)
+document.addEventListener('click', function (e) {
+    var row = e.target.closest('.exp-row');
+    if (!row) return;
+    if (e.target.closest('a, button, form')) return;
+    var url = row.getAttribute('data-detail-url');
+    if (url) window.location.href = url;
+});
+</script>

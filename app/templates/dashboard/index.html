@@ -1,0 +1,415 @@
+{% extends "base.html" %}
+{% block title %}安全Dashboard - WebSecLab{% endblock %}
+{% block content %}
+<!-- echarts 本地化: 优先本地静态文件, 加载失败再回退 CDN (实验室无外网时图表不挂) -->
+<script src="{{ url_for('static', filename='vendor/echarts.min.js') }}"></script>
+<script>
+  if (typeof echarts === 'undefined') {
+    document.write('<scr' + 'ipt src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"><\/scr' + 'ipt>');
+  }
+</script>
+
+<style>
+.chart-empty {
+    position: absolute;
+    top: 50%; left: 0; right: 0;
+    transform: translateY(-50%);
+    text-align: center;
+    color: #adb5bd;
+    font-size: 14px;
+    pointer-events: none;
+}
+</style>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-speedometer2"></i> 安全态势Dashboard</h2>
+    <div class="d-flex align-items-center gap-2">
+        <button class="btn btn-sm btn-outline-secondary" id="refreshBtn"
+                hx-get="{{ url_for('dashboard.dashboard_stats_partial') }}"
+                hx-target="#stats-cards"
+                hx-swap="innerHTML">
+            <i class="bi bi-arrow-clockwise"></i> 刷新数据
+            <span class="htmx-indicator spinner-border spinner-border-sm"></span>
+        </button>
+        {% if is_admin %}
+        <span class="badge bg-dark"><i class="bi bi-shield-lock"></i> 管理员视图 - 全平台数据</span>
+        {% else %}
+        <span class="badge bg-primary"><i class="bi bi-person"></i> 个人视图</span>
+        {% endif %}
+    </div>
+</div>
+
+{% if is_admin %}
+<!-- 异常告警区 (HTMX 每 60s 刷新, 仅管理员可见) -->
+<div id="alert-zone" hx-get="{{ url_for('dashboard.dashboard_alerts') }}" hx-trigger="every 60s" hx-swap="innerHTML">
+    {% with alerts = data.alerts %}{% include "dashboard/_alerts.html" %}{% endwith %}
+</div>
+
+<!-- 管理员: 全平台统计卡片 (HTMX 每 60s 自动刷新) -->
+<div class="row g-3 mb-4" id="stats-cards"
+     hx-get="{{ url_for('dashboard.dashboard_stats_partial') }}"
+     hx-trigger="every 60s"
+     hx-target="#stats-cards"
+     hx-swap="innerHTML">
+    {% include "dashboard/_stats_admin.html" %}
+</div>
+
+<!-- 用户维度下钻 (仅管理员可见) -->
+<div class="row g-3 mb-4">
+    <div class="col-md-7">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="mb-0"><i class="bi bi-exclamation-octagon text-danger"></i> Top10 风险用户</h6>
+                <a href="{{ url_for('dashboard.dashboard_users') }}" class="btn btn-sm btn-outline-secondary">全部</a>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light"><tr><th>用户</th><th>评估数</th><th>平均分</th><th>高危数</th><th></th></tr></thead>
+                        <tbody>
+                            {% for u in data.ranking %}
+                            <tr>
+                                <td><i class="bi bi-person"></i> {{ u.username }}</td>
+                                <td>{{ u.assess_cnt }}</td>
+                                <td><span class="badge bg-{% if u.avg_score >= 70 %}danger{% elif u.avg_score >= 40 %}warning{% else %}success{% endif %}">{{ u.avg_score }}</span></td>
+                                <td>{% if u.high_cnt > 0 %}<span class="badge bg-danger">{{ u.high_cnt }}</span>{% else %}0{% endif %}</td>
+                                <td><a href="{{ url_for('dashboard.dashboard_user_drill', uid=u.user_id) }}" class="btn btn-sm btn-outline-primary">详情</a></td>
+                            </tr>
+                            {% else %}
+                            <tr><td colspan="5" class="text-center text-muted py-3">暂无风险评估数据</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-5">
+        <div class="card">
+            <div class="card-header"><h6 class="mb-0"><i class="bi bi-fire text-warning"></i> 最危险实验</h6></div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light"><tr><th>实验</th><th>总数</th><th>失败</th><th>失败率</th></tr></thead>
+                        <tbody>
+                            {% for e in data.experiments %}
+                            <tr>
+                                <td>{{ e.name }}</td>
+                                <td>{{ e.total }}</td>
+                                <td>{% if e.failed_cnt > 0 %}<span class="badge bg-danger">{{ e.failed_cnt }}</span>{% else %}0{% endif %}</td>
+                                <td><span class="badge bg-{% if e.fail_rate >= 50 %}danger{% elif e.fail_rate >= 20 %}warning{% else %}success{% endif %}">{{ e.fail_rate }}%</span></td>
+                            </tr>
+                            {% else %}
+                            <tr><td colspan="4" class="text-center text-muted py-3">暂无实验数据</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3">
+    <!-- 漏洞分类柱状图 -->
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header"><h6 class="mb-0">漏洞分类统计</h6></div>
+            <div class="card-body position-relative">
+                <div id="vulnChart" style="height:300px;"></div>
+                <div class="chart-empty d-none">暂无数据</div>
+            </div>
+        </div>
+    </div>
+    <!-- AI 判定风险等级饼图 -->
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header"><h6 class="mb-0">AI 判定风险等级</h6></div>
+            <div class="card-body position-relative">
+                <div class="small text-muted mb-2">数据来源：AI 分析报告（含 Info 级，共 5 级）</div>
+                <div id="riskChart" style="height:300px;"></div>
+                <div class="chart-empty d-none">暂无数据</div>
+            </div>
+        </div>
+    </div>
+    <!-- 实验状态 -->
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header"><h6 class="mb-0">实验状态分布</h6></div>
+            <div class="card-body position-relative">
+                <div id="expChart" style="height:300px;"></div>
+                <div class="chart-empty d-none">暂无数据</div>
+            </div>
+        </div>
+    </div>
+    <!-- 扫描/AI概览 -->
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header"><h6 class="mb-0">扫描与AI概览</h6></div>
+            <div class="card-body position-relative">
+                <div id="scanChart" style="height:300px;"></div>
+                <div class="chart-empty d-none">暂无数据</div>
+            </div>
+        </div>
+    </div>
+    <!-- 多因素风险评分等级饼图 -->
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header"><h6 class="mb-0">多因素风险评分等级</h6></div>
+            <div class="card-body position-relative">
+                <div class="small text-muted mb-2">数据来源：风险评估引擎（Critical/High/Medium/Low，共 4 级）</div>
+                <div id="riskScoreChart" style="height:300px;"></div>
+                <div class="chart-empty d-none">暂无数据</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% else %}
+<!-- 普通用户: 个人统计卡片 (HTMX 每 60s 自动刷新) -->
+<div class="row g-3 mb-4" id="stats-cards"
+     hx-get="{{ url_for('dashboard.dashboard_stats_partial') }}"
+     hx-trigger="every 60s"
+     hx-target="#stats-cards"
+     hx-swap="innerHTML">
+    {% include "dashboard/_stats_user.html" %}
+</div>
+
+<!-- 实验统计详情 -->
+<div class="row g-3 mb-3">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header"><h6 class="mb-0">实验完成情况</h6></div>
+            <div class="card-body">
+                <div class="d-flex justify-content-between mb-1">
+                    <span>成功</span><strong class="text-success">{{ data.experiment_stats.success }}</strong>
+                </div>
+                <div class="d-flex justify-content-between mb-1">
+                    <span>失败</span><strong class="text-danger">{{ data.experiment_stats.failed }}</strong>
+                </div>
+                <div class="d-flex justify-content-between mb-1">
+                    <span>进行中</span><strong class="text-primary">{{ data.experiment_stats.running }}</strong>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header"><h6 class="mb-0">扫描统计</h6></div>
+            <div class="card-body">
+                <div class="d-flex justify-content-between mb-1">
+                    <span>总任务</span><strong>{{ data.scan_stats.total }}</strong>
+                </div>
+                <div class="d-flex justify-content-between mb-1">
+                    <span>已完成</span><strong class="text-success">{{ data.scan_stats.completed }}</strong>
+                </div>
+                <div class="d-flex justify-content-between mb-1">
+                    <span>开放端口</span><strong class="text-warning">{{ data.scan_stats.open_ports }}</strong>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header"><h6 class="mb-0">AI分析</h6></div>
+            <div class="card-body">
+                <div class="d-flex justify-content-between mb-1">
+                    <span>总分析</span><strong>{{ data.ai_stats.total }}</strong>
+                </div>
+                <div class="d-flex justify-content-between mb-1">
+                    <span>已完成</span><strong class="text-success">{{ data.ai_stats.completed }}</strong>
+                </div>
+                <div class="d-flex justify-content-between mb-1">
+                    <span>报告数</span><strong>{{ data.report_stats.generated }}</strong>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 用户图表 -->
+<div class="row g-3">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header"><h6 class="mb-0">实验状态分布</h6></div>
+            <div class="card-body position-relative">
+                <div id="expChart" style="height:300px;"></div>
+                <div class="chart-empty d-none">暂无数据</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header"><h6 class="mb-0">AI 判定风险等级</h6></div>
+            <div class="card-body position-relative">
+                <div class="small text-muted mb-2">数据来源：AI 分析报告（含 Info 级，共 5 级）</div>
+                <div id="riskChart" style="height:300px;"></div>
+                <div class="chart-empty d-none">暂无数据</div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- 上次刷新时间 -->
+<div class="text-center mt-3">
+    <small class="text-muted">
+        <i class="bi bi-clock"></i> 上次刷新: <span id="lastRefreshTime">--</span>
+        (数据每 60 秒自动刷新)
+    </small>
+</div>
+
+<script>
+{% if is_admin %}
+// 管理员: 漏洞分类柱状图
+var vulnChart = echarts.init(document.getElementById('vulnChart'));
+vulnChart.setOption({
+    tooltip: {},
+    xAxis: {
+        type: 'category',
+        data: [{% for v in data.vulnerability_chart %}'{{ v.name }}'{% if not loop.last %},{% endif %}{% endfor %}],
+        axisLabel: { rotate: 30, interval: 0, fontSize: 11 }
+    },
+    yAxis: { type: 'value' },
+    grid: { bottom: 60 },
+    series: [{ type: 'bar', data: [{% for v in data.vulnerability_chart %}{{ v.count }}{% if not loop.last %},{% endif %}{% endfor %}], itemStyle: { color: '#0d6efd' } }]
+});
+
+// 扫描/AI概览
+var scanChart = echarts.init(document.getElementById('scanChart'));
+scanChart.setOption({
+    tooltip: {},
+    xAxis: { type: 'category', data: ['扫描总数','扫描完成','AI总数','AI完成'] },
+    yAxis: { type: 'value' },
+    series: [{ type: 'bar', data: [{{ data.scan_overview.total }},{{ data.scan_overview.completed }},{{ data.ai_overview.total }},{{ data.ai_overview.completed }}], itemStyle: { color: '#198754' } }]
+});
+
+// 多因素风险评分分布饼图
+var riskScoreData = [{% for r in data.risk_score_distribution %}{value: {{ r.count }}, name: '{{ r.name }}'}{% if not loop.last %},{% endif %}{% endfor %}];
+var riskScoreChart = echarts.init(document.getElementById('riskScoreChart'));
+riskScoreChart.setOption({
+    tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
+    legend: { bottom: 0 },
+    series: [{
+        type: 'pie', radius: ['40%', '65%'],
+        data: riskScoreData,
+        color: ['#212529','#dc3545','#ffc107','#0dcaf0'],
+        label: { formatter: '{b}\n{c}次 ({d}%)' },
+        emphasis: { itemStyle: { shadowBlur: 10, shadowOffsetX: 0, shadowColor: 'rgba(0,0,0,0.3)' } }
+    }]
+});
+{% endif %}
+
+// 风险等级饼图 (AI 判定)
+var riskData = [{% for r in data.risk_distribution %}{value: {{ r.count }}, name: '{{ r.name }}'}{% if not loop.last %},{% endif %}{% endfor %}];
+var riskChart = echarts.init(document.getElementById('riskChart'));
+riskChart.setOption({
+    tooltip: { trigger: 'item' },
+    legend: { bottom: 0 },
+    series: [{
+        type: 'pie', radius: '60%',
+        data: riskData,
+        color: ['#212529','#dc3545','#ffc107','#0dcaf0','#6c757d'],
+        label: { formatter: '{b}: {c}' }
+    }]
+});
+
+// 实验状态饼图
+var expData = [{% for e in data.experiment_status_chart %}{value: {{ e.count }}, name: '{{ e.name }}'}{% if not loop.last %},{% endif %}{% endfor %}];
+var expChart = echarts.init(document.getElementById('expChart'));
+expChart.setOption({
+    tooltip: { trigger: 'item' },
+    legend: { bottom: 0 },
+    series: [{
+        type: 'pie', radius: '60%',
+        data: expData,
+        color: ['#6c757d','#0d6efd','#198754','#dc3545','#adb5bd'],
+        label: { formatter: '{b}: {c}' }
+    }]
+});
+
+// 响应窗口变化
+window.addEventListener('resize', function() {
+    riskChart.resize(); expChart.resize();
+    {% if is_admin %}vulnChart.resize(); scanChart.resize(); riskScoreChart.resize();{% endif %}
+});
+
+// ===== 工具函数 =====
+function sumCounts(data) {
+    var s = 0;
+    (data || []).forEach(function(d) { s += (d.value || 0); });
+    return s;
+}
+function checkEmpty(id, hasData) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    var empty = el.parentNode.querySelector('.chart-empty');
+    if (empty) empty.classList.toggle('d-none', !!hasData);
+}
+
+// 初始空数据占位
+checkEmpty('riskChart', sumCounts(riskData) > 0);
+checkEmpty('expChart', sumCounts(expData) > 0);
+{% if is_admin %}
+checkEmpty('vulnChart', {{ data.vulnerability_chart | length }} > 0);
+checkEmpty('scanChart', ({{ data.scan_overview.total }} + {{ data.ai_overview.total }}) > 0);
+checkEmpty('riskScoreChart', sumCounts(riskScoreData) > 0);
+{% endif %}
+
+// 更新刷新时间
+function updateRefreshTime() {
+    var now = new Date();
+    document.getElementById('lastRefreshTime').textContent =
+        now.getHours().toString().padStart(2,'0') + ':' +
+        now.getMinutes().toString().padStart(2,'0') + ':' +
+        now.getSeconds().toString().padStart(2,'0');
+}
+updateRefreshTime();
+
+// ===== 统一刷新机制 =====
+// 原先 stats-cards 用 HTMX 每 60s 刷新、图表用独立的 client setInterval 每 60s fetch,
+// 两套定时器并存导致图表闪烁。现统一为单一 HTMX 定时器: stats-cards 刷新完成后
+// (htmx:afterSettle) 触发一次图表数据拉取, 手动刷新按钮复用同一事件, 不再另起定时器。
+function refreshCharts() {
+    fetch('{{ url_for("dashboard.dashboard_api") }}')
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            if (d.risk_distribution && d.risk_distribution.length) {
+                var nr = d.risk_distribution.map(function(r) { return {value: r.count, name: r.name}; });
+                riskChart.setOption({series: [{data: nr}]});
+                checkEmpty('riskChart', sumCounts(nr) > 0);
+            }
+            if (d.experiment_status_chart && d.experiment_status_chart.length) {
+                var ne = d.experiment_status_chart.map(function(e) { return {value: e.count, name: e.name}; });
+                expChart.setOption({series: [{data: ne}]});
+                checkEmpty('expChart', sumCounts(ne) > 0);
+            }
+            {% if is_admin %}
+            if (d.vulnerability_chart) {
+                vulnChart.setOption({
+                    xAxis: {data: d.vulnerability_chart.map(function(v){return v.name;})},
+                    series: [{data: d.vulnerability_chart.map(function(v){return v.count;})}]
+                });
+                checkEmpty('vulnChart', d.vulnerability_chart.length > 0);
+            }
+            if (d.scan_overview && d.ai_overview) {
+                scanChart.setOption({
+                    series: [{data: [d.scan_overview.total, d.scan_overview.completed, d.ai_overview.total, d.ai_overview.completed]}]
+                });
+                checkEmpty('scanChart', (d.scan_overview.total + d.ai_overview.total) > 0);
+            }
+            if (d.risk_score_distribution) {
+                var nrs = d.risk_score_distribution.map(function(r) { return {value: r.count, name: r.name}; });
+                riskScoreChart.setOption({series: [{data: nrs}]});
+                checkEmpty('riskScoreChart', sumCounts(nrs) > 0);
+            }
+            {% endif %}
+        })
+        .catch(function() {});
+}
+
+// 绑定到 HTMX 刷新完成事件 (自动每 60s + 手动刷新按钮均触发)
+document.getElementById('stats-cards').addEventListener('htmx:afterSettle', updateRefreshTime);
+document.getElementById('stats-cards').addEventListener('htmx:afterSettle', refreshCharts);
+</script>
+{% endblock %}

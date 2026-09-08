@@ -1,0 +1,377 @@
+{% extends "base.html" %}
+{% block title %}扫描详情 - WebSecLab{% endblock %}
+{% block head_extra %}
+{% if task.status in ['running', 'created'] %}
+<!-- 扫描进行中: 整页自动刷新兜底 (无 JS 依赖), 完成后此标签不再下发 -->
+<meta http-equiv="refresh" content="4">
+{% endif %}
+{% endblock %}
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <!-- 任务信息卡片 -->
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-radar"></i> 扫描任务 #{{ task.id }}</h5>
+                <span class="badge bg-{{ task.status_badge }} fs-6" id="status-badge">{{ task.status_label }}</span>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <table class="table table-borderless mb-0">
+                            <tr>
+                                <th style="width:120px;">扫描目标:</th>
+                                <td><code>{{ task.target }}</code></td>
+                            </tr>
+                            <tr>
+                                <th>扫描方式:</th>
+                                <td>{{ task.scan_type_label }}</td>
+                            </tr>
+                            <tr>
+                                <th>端口范围:</th>
+                                <td>{{ task.port_range }}</td>
+                            </tr>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <table class="table table-borderless mb-0">
+                            <tr>
+                                <th style="width:120px;">开放端口:</th>
+                                <td><strong id="open-ports-count">{{ task.open_ports_count }}</strong> 个</td>
+                            </tr>
+                            <tr>
+                                <th>创建时间:</th>
+                                <td>{{ task.created_time.strftime('%Y-%m-%d %H:%M:%S') if task.created_time else '-' }}</td>
+                            </tr>
+                            <tr>
+                                <th>耗时:</th>
+                                <td id="duration-cell">
+                                    {% if task.start_time and task.end_time %}
+                                        {{ (task.end_time - task.start_time).total_seconds() | round(1) }} 秒
+                                    {% else %}
+                                        <span class="text-muted" id="duration-placeholder">计算中...</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 进度条 (运行中 / 已完成 / 失败 均显示最终结果) -->
+                {% if task.status in ['running', 'created', 'completed', 'failed'] %}
+                <div class="mt-3" id="progress-section">
+                    <div class="d-flex justify-content-between mb-1">
+                        <small id="progress-text" class="text-muted">
+                            {% if task.status in ['completed', 'failed'] %}
+                                {% if task.status == 'completed' %}
+                                    扫描完成，共发现 {{ task.open_ports_count }} 个开放端口
+                                {% else %}
+                                    扫描失败
+                                {% endif %}
+                            {% else %}
+                                {{ task.progress_message or '准备中...' }}
+                            {% endif %}
+                        </small>
+                        <small id="progress-percent" class="text-muted">{{ task.progress or 0 }}%</small>
+                    </div>
+                    <div class="progress" style="height: 22px;">
+                        <div class="progress-bar {% if task.status in ['completed', 'failed'] %}{% if task.status == 'completed' %}bg-success{% else %}bg-danger{% endif %}{% else %}progress-bar-striped progress-bar-animated{% endif %}"
+                             id="progress-bar"
+                             role="progressbar"
+                             style="width: {{ task.progress or 0 }}%;"
+                             aria-valuenow="{{ task.progress or 0 }}"
+                             aria-valuemin="0" aria-valuemax="100">
+                            {{ task.progress or 0 }}%
+                        </div>
+                    </div>
+                    <div class="d-flex justify-content-between mt-1">
+                        <small class="text-muted" id="scanned-info">
+                            {% if task.total_ports %}
+                            已扫描 {{ task.scanned_ports or 0 }} / {{ task.total_ports }} 个端口
+                            {% elif task.status in ['completed', 'failed'] %}
+                            共扫描 {{ task.total_ports or 0 }} 个端口
+                            {% endif %}
+                        </small>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- 错误信息 -->
+                <div class="alert alert-warning mt-2 mb-0" id="error-alert"
+                     style="{% if not task.error_message %}display:none{% endif %}">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    <span id="error-message">{{ task.error_message or '' }}</span>
+                </div>
+            </div>
+            <div class="card-footer">
+                {% if task.status == 'running' %}
+                <form method="POST" action="{{ url_for('scan.scan_stop', task_id=task.id) }}" class="d-inline" id="stop-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-sm btn-outline-warning" id="stop-btn"
+                            onclick="return confirm('确定停止此扫描任务？已获取的结果将保留。')">
+                        <i class="bi bi-stop-circle"></i> 停止扫描
+                    </button>
+                </form>
+                {% endif %}
+                <form method="POST" action="{{ url_for('scan.scan_delete', task_id=task.id) }}" class="d-inline">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-sm btn-outline-danger"
+                            onclick="return confirm('确定删除此扫描任务？')">
+                        <i class="bi bi-trash"></i> 删除
+                    </button>
+                </form>
+                {% if task.status == 'completed' %}
+                <a href="{{ url_for('ai.ai_analyze_scan', scan_task_id=task.id) }}" class="btn btn-sm btn-outline-success">
+                    <i class="bi bi-robot"></i> AI分析
+                </a>
+                {% endif %}
+                <a href="{{ url_for('scan.scan_list') }}" class="btn btn-sm btn-outline-secondary">
+                    <i class="bi bi-arrow-left"></i> 返回
+                </a>
+            </div>
+        </div>
+
+        <!-- 扫描结果 -->
+        <div class="card" id="results-card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-list-check"></i> 扫描结果</h5>
+                {% if task.status in ['running', 'created'] %}
+                <span class="spinner-border spinner-border-sm text-primary" id="results-spinner" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </span>
+                {% endif %}
+            </div>
+            {% if results %}
+            <div class="table-responsive">
+                <table class="table table-hover mb-0" id="results-table">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>端口</th>
+                            <th>协议</th>
+                            <th>状态</th>
+                            <th>服务</th>
+                            <th>版本</th>
+                            <th>Banner</th>
+                        </tr>
+                    </thead>
+                    <tbody id="results-tbody">
+                        {% for r in results %}
+                        <tr>
+                            <td><strong>{{ r.port }}</strong></td>
+                            <td>{{ r.protocol }}</td>
+                            <td><span class="badge bg-{{ r.state_badge }}">{{ r.state }}</span></td>
+                            <td>{{ r.service or '-' }}</td>
+                            <td>{{ r.version or '-' }}</td>
+                            <td>
+                                {% if r.banner %}
+                                <code class="small">{{ r.banner[:80] }}{% if r.banner|length > 80 %}...{% endif %}</code>
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="card-body text-center text-muted py-4" id="no-results-msg">
+                {% if task.status in ['running', 'created'] %}
+                <div class="spinner-border text-primary mb-3" role="status">
+                    <span class="visually-hidden">扫描中...</span>
+                </div>
+                <p>扫描进行中，结果将在完成后显示...</p>
+                {% else %}
+                <i class="bi bi-inbox display-4"></i>
+                <p class="mt-2">未发现开放端口</p>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    // 从后端注入初始状态
+    var taskStatus = '{{ task.status }}';
+    var taskId = {{ task.id }};
+    var pollInterval = null;
+    var lastSuccessTs = Date.now();
+    var consecutiveFails = 0;
+
+    // 仅在任务运行中或等待中时启动轮询
+    if (taskStatus === 'running' || taskStatus === 'created') {
+        startPolling();
+        // 看门狗: 若轮询连续失败超过 12 秒, 整页刷新兜底 (与 meta 刷新互补)
+        setInterval(function() {
+            if (Date.now() - lastSuccessTs > 12000) {
+                location.reload();
+            }
+        }, 4000);
+    }
+
+    function startPolling() {
+        pollInterval = setInterval(pollStatus, 2000);
+    }
+
+    function pollStatus() {
+        fetch('/scan/api/status/' + taskId)
+            .then(function(resp) { return resp.json(); })
+            .then(function(data) {
+                if (data.error) {
+                    clearInterval(pollInterval);
+                    return;
+                }
+                lastSuccessTs = Date.now();
+                consecutiveFails = 0;
+                updateUI(data);
+
+                // 任务结束（完成或失败）时停止轮询
+                if (!data.is_running) {
+                    clearInterval(pollInterval);
+                }
+            })
+            .catch(function(err) {
+                consecutiveFails++;
+                console.error('轮询失败:', err);
+                // 连续失败 3 次 → 整页兜底刷新
+                if (consecutiveFails >= 3) {
+                    location.reload();
+                }
+            });
+    }
+
+    function updateUI(data) {
+        // 更新状态徽章
+        var badge = document.getElementById('status-badge');
+        badge.textContent = data.status_label;
+        badge.className = 'badge bg-' + data.status_badge + ' fs-6';
+
+        // 更新进度条
+        var progressBar = document.getElementById('progress-bar');
+        var progressText = document.getElementById('progress-text');
+        var progressPercent = document.getElementById('progress-percent');
+        var scannedInfo = document.getElementById('scanned-info');
+        var progressSection = document.getElementById('progress-section');
+
+        if (progressBar) {
+            progressBar.style.width = data.progress + '%';
+            progressBar.setAttribute('aria-valuenow', data.progress);
+            progressBar.textContent = data.progress + '%';
+        }
+        if (progressText) {
+            progressText.textContent = data.progress_message || '';
+        }
+        if (progressPercent) {
+            progressPercent.textContent = data.progress + '%';
+        }
+        if (scannedInfo && data.total_ports > 0) {
+            scannedInfo.textContent = '已扫描 ' + data.scanned_ports + ' / ' + data.total_ports + ' 个端口';
+        }
+
+        // 更新开放端口数
+        document.getElementById('open-ports-count').textContent = data.open_ports;
+
+        // 更新耗时
+        if (data.duration !== undefined) {
+            var durationCell = document.getElementById('duration-cell');
+            durationCell.textContent = data.duration + ' 秒';
+        }
+
+        // 更新错误信息
+        if (data.error_message) {
+            var errorAlert = document.getElementById('error-alert');
+            var errorMsg = document.getElementById('error-message');
+            errorAlert.style.display = 'block';
+            errorMsg.textContent = data.error_message;
+        }
+
+        // 任务完成: 更新结果表格
+        if (!data.is_running) {
+            // 隐藏停止按钮
+            var stopBtn = document.getElementById('stop-btn');
+            if (stopBtn) stopBtn.style.display = 'none';
+
+            // 隐藏加载动画
+            var spinner = document.getElementById('results-spinner');
+            if (spinner) spinner.style.display = 'none';
+
+            // 更新结果
+            if (data.results && data.results.length > 0) {
+                renderResults(data.results);
+            } else {
+                var noResultsMsg = document.getElementById('no-results-msg');
+                if (noResultsMsg) {
+                    noResultsMsg.innerHTML = '<i class="bi bi-inbox display-4"></i>' +
+                        '<p class="mt-2">' + (data.status === 'failed' ? '扫描失败' : '未发现开放端口') + '</p>';
+                }
+            }
+
+            // 完成后显示 AI 分析按钮
+            if (data.status === 'completed') {
+                var cardFooter = document.querySelector('.card-footer');
+                if (cardFooter && !cardFooter.querySelector('a[href*="ai/analyze-scan"]')) {
+                    var aiLink = document.createElement('a');
+                    aiLink.href = '/ai/analyze-scan/' + taskId;
+                    aiLink.className = 'btn btn-sm btn-outline-success';
+                    aiLink.innerHTML = '<i class="bi bi-robot"></i> AI分析';
+                    // 插入到删除按钮之后
+                    cardFooter.insertBefore(aiLink, cardFooter.children[1]);
+                }
+            }
+
+            // 移除进度条动画
+            if (progressBar) {
+                progressBar.classList.remove('progress-bar-animated');
+                if (data.status === 'failed') {
+                    progressBar.classList.remove('bg-primary');
+                    progressBar.classList.add('bg-danger');
+                } else {
+                    progressBar.classList.add('bg-success');
+                }
+            }
+        }
+    }
+
+    function renderResults(results) {
+        // 隐藏无结果提示
+        var noResultsMsg = document.getElementById('no-results-msg');
+        if (noResultsMsg) noResultsMsg.style.display = 'none';
+
+        // 如果表格不存在则创建
+        var table = document.getElementById('results-table');
+        var cardBody = document.querySelector('#results-card .card-body');
+
+        if (!table && cardBody) {
+            var wrapper = document.createElement('div');
+            wrapper.className = 'table-responsive';
+            wrapper.innerHTML =
+                '<table class="table table-hover mb-0" id="results-table">' +
+                '<thead class="table-dark"><tr>' +
+                '<th>端口</th><th>协议</th><th>状态</th><th>服务</th><th>版本</th><th>Banner</th>' +
+                '</tr></thead><tbody id="results-tbody"></tbody></table>';
+            cardBody.parentNode.insertBefore(wrapper, cardBody);
+            cardBody.style.display = 'none';
+            table = document.getElementById('results-table');
+        }
+
+        var tbody = document.getElementById('results-tbody');
+        if (!tbody) return;
+
+        tbody.innerHTML = '';
+        results.forEach(function(r) {
+            var tr = document.createElement('tr');
+            tr.innerHTML =
+                '<td><strong>' + r.port + '</strong></td>' +
+                '<td>' + r.protocol + '</td>' +
+                '<td><span class="badge bg-' + r.state_badge + '">' + r.state + '</span></td>' +
+                '<td>' + r.service + '</td>' +
+                '<td>' + r.version + '</td>' +
+                '<td>' + (r.banner !== '-' ? '<code class="small">' + r.banner + '</code>' : '-') + '</td>';
+            tbody.appendChild(tr);
+        });
+    }
+})();
+</script>
+{% endblock %}

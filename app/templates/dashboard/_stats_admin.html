@@ -1,0 +1,90 @@
+{# 管理员统计卡片片段 - 供 HTMX 局部刷新 #}
+<div class="col">
+    <div class="card text-center bg-primary text-white">
+        <div class="card-body py-3">
+            <h3>{{ data.platform_stats.user_count }}</h3>
+            <small>用户总数</small>
+        </div>
+    </div>
+</div>
+<div class="col">
+    <div class="card text-center bg-info text-white">
+        <div class="card-body py-3">
+            <h3>{{ data.platform_stats.vulnerability_count }}</h3>
+            <small>漏洞数量</small>
+        </div>
+    </div>
+</div>
+<div class="col">
+    <div class="card text-center bg-success text-white">
+        <div class="card-body py-3">
+            <h3>{{ data.platform_stats.experiment_count }}</h3>
+            <small>实验数量</small>
+        </div>
+    </div>
+</div>
+<div class="col">
+    <div class="card text-center bg-warning text-dark">
+        <div class="card-body py-3">
+            <h3>{{ data.platform_stats.scan_count }}</h3>
+            <small>扫描任务</small>
+        </div>
+    </div>
+</div>
+<div class="col">
+    <div class="card text-center bg-secondary text-white">
+        <div class="card-body py-3">
+            <h3>{{ data.platform_stats.ai_count }}</h3>
+            <small>AI分析</small>
+        </div>
+    </div>
+</div>
+<div class="col">
+    <div class="card text-center bg-danger text-white">
+        <div class="card-body py-3">
+            <h3>{{ data.platform_stats.report_count }}</h3>
+            <small>报告数量</small>
+        </div>
+    </div>
+</div>
+<div class="col">
+    <div class="card text-center bg-dark text-white">
+        <div class="card-body py-3">
+            <h3>{{ data.risk_stats.total }}</h3>
+            <small>风险评估</small>
+        </div>
+    </div>
+</div>
+{# KRI 关键风险指标卡 — 与上方卡片同处 #stats-cards, 自动每60s刷新 #}
+<div class="col">
+    <div class="card text-center bg-secondary text-white">
+        <div class="card-body py-3">
+            <h3>{{ data.kri.avg_score }}</h3>
+            <small>平均风险评分</small>
+        </div>
+    </div>
+</div>
+<div class="col">
+    <div class="card text-center bg-danger text-white">
+        <div class="card-body py-3">
+            <h3>{{ data.kri.high_risk_ratio }}%</h3>
+            <small>高危占比 (C+H)</small>
+        </div>
+    </div>
+</div>
+<div class="col">
+    <div class="card text-center bg-warning text-dark">
+        <div class="card-body py-3">
+            <h3>{{ data.kri.assessments_24h }}</h3>
+            <small>近24h新增评估</small>
+        </div>
+    </div>
+</div>
+<div class="col">
+    <div class="card text-center bg-info text-white">
+        <div class="card-body py-3">
+            <h3>{{ data.kri.high_risk_users }}</h3>
+            <small>高危用户数</small>
+        </div>
+    </div>
+</div>

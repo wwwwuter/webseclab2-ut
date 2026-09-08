@@ -1,0 +1,70 @@
+{% extends 'base.html' %}
+{% block page_title %}账号管理{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{{ url_for('static', filename='css/profile.css') }}">{% endblock %}
+
+{% block content %}
+<div class="profile-wrap">
+    <div class="card edit-card">
+        <div class="card-header">账号管理</div>
+        <div class="card-body">
+            <form id="profile-form" autocomplete="off">
+
+                <!-- 修改头像 -->
+                <div class="avatar-edit">
+                    <div class="profile-avatar lg">
+                        {% if avatar_url %}
+                            <img src="{{ avatar_url }}" id="avatar-preview" alt="头像">
+                        {% else %}
+                            <span id="avatar-initial">{{ (user.nickname or user.username)[0]|upper }}</span>
+                        {% endif %}
+                    </div>
+                    <div>
+                        <label class="btn btn-outline-secondary btn-sm mb-0">
+                            选择头像
+                            <input type="file" id="avatar-input" accept="image/png,image/jpeg,image/jpg" hidden>
+                        </label>
+                        <div class="form-text">支持 PNG / JPG / JPEG，最大 2MB</div>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">昵称</label>
+                    <input type="text" class="form-control" id="nickname" maxlength="32"
+                           value="{{ user.nickname or '' }}" placeholder="{{ user.username }}">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">邮箱</label>
+                    <input type="email" class="form-control" id="email" value="{{ user.email or '' }}">
+                </div>
+
+                <hr class="my-4">
+                <h6 class="mb-3 text-muted">修改密码</h6>
+                <div class="mb-3">
+                    <label class="form-label">当前密码</label>
+                    <input type="password" class="form-control" id="pw-current" autocomplete="current-password">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">新密码</label>
+                    <input type="password" class="form-control" id="pw-new" autocomplete="new-password">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">确认新密码</label>
+                    <input type="password" class="form-control" id="pw-confirm" autocomplete="new-password">
+                    <div class="form-text text-danger d-none" id="pw-mismatch">两次输入的新密码不一致</div>
+                </div>
+
+                <div class="d-flex gap-2 mt-4">
+                    <button type="button" class="btn btn-primary" id="save-btn">
+                        <i class="bi bi-check-lg"></i> 保存修改
+                    </button>
+                    <a href="{{ url_for('profile.index') }}" class="btn btn-outline-secondary">返回</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/profile.js') }}"></script>
+{% endblock %}

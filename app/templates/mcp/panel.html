@@ -1,0 +1,535 @@
+{% extends "base.html" %}
+{% block title %}MCP 工具调用 - WebSecLab{% endblock %}
+
+{% block content %}
+<style>
+/* ===== 整体布局 ===== */
+.mcp-console { display: flex; gap: 0; border: 1px solid #dee2e6; border-radius: 12px; overflow: hidden; background: #fff; min-height: 600px; }
+.mcp-sidebar { width: 320px; min-width: 320px; background: #f8f9fa; border-right: 1px solid #dee2e6; display: flex; flex-direction: column; }
+.mcp-main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+
+/* ===== 侧边栏头部 ===== */
+.mcp-sidebar-header { padding: 1rem; background: #212529; color: #fff; }
+.mcp-sidebar-header h6 { margin: 0; font-weight: 600; font-size: 0.9rem; }
+.mcp-sidebar-header small { opacity: 0.6; font-size: 0.75rem; }
+
+/* ===== 工具列表 ===== */
+.mcp-tool-list { flex: 1; overflow-y: auto; padding: 0.5rem; }
+.mcp-tool-item {
+    display: flex; align-items: flex-start; gap: 0.6rem;
+    padding: 0.6rem 0.75rem; border-radius: 8px; cursor: pointer;
+    transition: all 0.15s; margin-bottom: 2px; border: 1px solid transparent;
+}
+.mcp-tool-item:hover { background: #e9ecef; }
+.mcp-tool-item.active { background: #cfe2ff; border-color: #9ec5fe; }
+.mcp-tool-dot {
+    width: 32px; height: 32px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.9rem; flex-shrink: 0; margin-top: 1px;
+}
+.mcp-tool-meta { flex: 1; min-width: 0; }
+.mcp-tool-meta .name { font-weight: 600; font-size: 0.85rem; color: #212529; }
+.mcp-tool-meta .desc { font-size: 0.75rem; color: #6c757d; line-height: 1.3; margin-top: 1px;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.mcp-tool-run-btn {
+    flex-shrink: 0; width: 28px; height: 28px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    border: 1px solid #dee2e6; background: #fff; color: #6c757d;
+    font-size: 0.7rem; transition: all 0.15s; align-self: center;
+}
+.mcp-tool-run-btn:hover { background: #0d6efd; color: #fff; border-color: #0d6efd; }
+
+/* ===== 快捷按钮区 ===== */
+.mcp-quick-actions { padding: 0.5rem; border-top: 1px solid #dee2e6; background: #fff; }
+.mcp-quick-btn { font-size: 0.78rem; }
+
+/* ===== 完整分析计划 (固定在 scanner 下方) ===== */
+.mcp-analysis-plan {
+    margin: 4px 8px 8px; padding: 0.7rem 0.75rem;
+    background: #f0f4ff; border: 1px solid #c7d2fe; border-radius: 10px;
+}
+.mcp-analysis-plan .plan-header {
+    font-weight: 600; font-size: 0.82rem; color: #374151; margin-bottom: 0.5rem;
+    display: flex; align-items: center; gap: 0.4rem;
+}
+.mcp-analysis-plan .form-label {
+    font-size: 0.72rem; font-weight: 500; color: #495057; margin-bottom: 1px;
+}
+.mcp-analysis-plan .form-control-sm { font-size: 0.8rem; }
+.mcp-analysis-plan .plan-hint {
+    font-size: 0.68rem; color: #adb5bd; margin-top: 4px; text-align: center;
+}
+
+/* ===== 右侧主面板 ===== */
+.mcp-main-header {
+    padding: 0.6rem 1rem; background: #f8f9fa; border-bottom: 1px solid #dee2e6;
+    display: flex; justify-content: space-between; align-items: center;
+}
+.mcp-main-header .title { font-weight: 600; font-size: 0.9rem; color: #495057; }
+.mcp-main-body { flex: 1; padding: 1rem; overflow-y: auto; }
+
+/* ===== 空状态 ===== */
+.mcp-empty { text-align: center; padding: 3rem 1rem; color: #adb5bd; }
+.mcp-empty i { font-size: 3rem; display: block; margin-bottom: 0.75rem; }
+
+/* ===== 工具参数表单 ===== */
+.mcp-param-form { background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
+.mcp-param-form .form-label { font-size: 0.8rem; font-weight: 500; color: #495057; margin-bottom: 0.2rem; }
+.mcp-param-form .form-control-sm { font-size: 0.85rem; }
+
+/* ===== 结果卡片 ===== */
+.mcp-result-card { border-radius: 8px; margin-bottom: 1rem; overflow: hidden; border: 1px solid #dee2e6; animation: fadeInUp 0.3s ease; }
+.mcp-result-card .result-bar { padding: 0.5rem 0.75rem; display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; }
+.mcp-result-card .result-bar.success { background: #d1e7dd; color: #0f5132; border-bottom: 1px solid #badbcc; }
+.mcp-result-card .result-bar.fail { background: #f8d7da; color: #842029; border-bottom: 1px solid #f5c2c7; }
+.mcp-result-card .result-body { padding: 0.75rem; }
+.mcp-result-card .result-body pre { font-size: 0.8rem; max-height: 260px; margin: 0; background: #f8f9fa; padding: 0.5rem; border-radius: 4px; }
+
+/* ===== 加载动画 ===== */
+.mcp-loading { text-align: center; padding: 2rem; color: #6c757d; }
+.mcp-loading .dots { display: inline-flex; gap: 4px; margin-bottom: 0.5rem; }
+.mcp-loading .dots span { width: 8px; height: 8px; background: #0d6efd; border-radius: 50%; animation: bounce 1.2s infinite; }
+.mcp-loading .dots span:nth-child(2) { animation-delay: 0.2s; }
+.mcp-loading .dots span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
+@keyframes fadeInUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+/* ===== HTMX 指示器 ===== */
+.htmx-indicator { display: none !important; }
+.htmx-request .htmx-indicator { display: flex !important; }
+.htmx-request.htmx-indicator { display: flex !important; }
+
+/* ===== 执行历史时间线 ===== */
+.mcp-history-item { font-size: 0.78rem; padding: 0.4rem 0; border-bottom: 1px solid #f0f0f0; display: flex; justify-content: space-between; }
+.mcp-history-item:last-child { border-bottom: none; }
+
+/* ===== 响应式 ===== */
+@media (max-width: 768px) {
+    .mcp-console { flex-direction: column; min-height: auto; }
+    .mcp-sidebar { width: 100%; min-width: 100%; max-height: 350px; border-right: none; border-bottom: 1px solid #dee2e6; }
+    .mcp-main { min-height: 400px; }
+}
+</style>
+
+<div class="mcp-console">
+    <!-- ========== 左侧: 工具列表面板 ========== -->
+    <div class="mcp-sidebar">
+        <div class="mcp-sidebar-header">
+            <div class="d-flex align-items-center gap-2">
+                <i class="bi bi-cpu" style="font-size: 1.1rem;"></i>
+                <div>
+                    <h6>AI Agent 工具编排</h6>
+                    <small>MCP 框架 · {{ tools|length }} 个工具可用</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- 工具列表 -->
+        <div class="mcp-tool-list">
+            {% set tool_colors = {
+                'scanner': '#0d6efd', 'nmap': '#6f42c1', 'knowledge': '#198754',
+                'risk': '#dc3545', 'dashboard': '#fd7e14', 'report': '#0dcaf0'
+            } %}
+            {% set tool_icons = {
+                'scanner': 'bi-wifi', 'nmap': 'bi-radar', 'knowledge': 'bi-book',
+                'risk': 'bi-shield-exclamation', 'dashboard': 'bi-speedometer2', 'report': 'bi-file-earmark-text'
+            } %}
+
+            {% for tool in tools %}
+            {% set color = tool_colors.get(tool.name, '#6c757d') %}
+            {% set icon = tool_icons.get(tool.name, 'bi-gear') %}
+            {% if tool.name == 'scanner' %}
+            <!-- 完整分析计划 (固定在 scanner 上方) -->
+            <div class="mcp-analysis-plan">
+                <div class="plan-header">
+                    <i class="bi bi-rocket-takeoff"></i> 完整分析计划
+                </div>
+                <form hx-post="{{ url_for('mcp.mcp_analysis') }}"
+                      hx-target="#result-body"
+                      hx-swap="afterbegin"
+                      onsubmit="clearResults('analysis')">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="mb-1">
+                        <label class="form-label">扫描目标 <span class="text-muted">(触发端口扫描)</span></label>
+                        <input type="text" class="form-control form-control-sm" name="target"
+                               placeholder="如 192.168.1.1">
+                    </div>
+                    <div class="mb-1">
+                        <label class="form-label">实验 ID <span class="text-muted">(触发知识库+风险评估)</span></label>
+                        <input type="number" class="form-control form-control-sm" name="experiment_id"
+                               placeholder="数字">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">扫描 ID <span class="text-muted">(备选: 触发风险评估)</span></label>
+                        <input type="number" class="form-control form-control-sm" name="scan_id"
+                               placeholder="数字">
+                    </div>
+                    <button type="submit" class="btn btn-sm btn-dark w-100">
+                        <i class="bi bi-play-fill"></i> 执行分析计划
+                    </button>
+                    <div class="plan-hint">不填参数则仅执行安全态势统计</div>
+                </form>
+            </div>
+            {% endif %}
+            <div class="mcp-tool-item" id="tool-item-{{ tool.name }}"
+                 onclick="selectTool('{{ tool.name }}')">
+                <div class="mcp-tool-dot" style="background: {{ color }}12; color: {{ color }};">
+                    <i class="bi {{ icon }}"></i>
+                </div>
+                <div class="mcp-tool-meta">
+                    <div class="name">{{ tool.name }}</div>
+                    <div class="desc">{{ tool.description }}</div>
+                </div>
+                <form hx-post="{{ url_for('mcp.mcp_execute') }}"
+                      hx-target="#result-body"
+                      hx-swap="afterbegin"
+                      onsubmit="event.stopPropagation(); clearResults('tool', '{{ tool.name }}');"
+                      id="quick-form-{{ tool.name }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="tool" value="{{ tool.name }}">
+                    <button type="submit" class="mcp-tool-run-btn" title="快速执行"
+                            onclick="event.stopPropagation();">
+                        <i class="bi bi-play-fill"></i>
+                    </button>
+                </form>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- ========== 右侧: 执行结果面板 ========== -->
+    <div class="mcp-main">
+        <div class="mcp-main-header">
+            <span class="title"><i class="bi bi-terminal"></i> 执行结果</span>
+            <div class="d-flex align-items-center gap-2">
+                <span id="exec-count" class="badge bg-secondary" style="font-size: 0.7rem;">0</span>
+                <button class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size: 0.75rem;"
+                        onclick="clearAllResults()">
+                    <i class="bi bi-trash3"></i> 清空
+                </button>
+            </div>
+        </div>
+
+        <div class="mcp-main-body" id="result-body">
+            <div class="mcp-empty" id="empty-state">
+                <i class="bi bi-terminal"></i>
+                <div>选择左侧工具执行</div>
+                <div class="small mt-1">执行结果将在此处实时展示</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 加载指示器模板 (由 JS 注入到结果面板) -->
+<template id="loading-tpl">
+    <div class="ai-loading-inject" style="display:flex;align-items:center;gap:.6rem;padding:1rem;animation:aiFadeIn .3s ease">
+        <div style="display:flex;gap:4px">
+            <span style="width:8px;height:8px;background:#1a73e8;border-radius:50%;animation:aiDotBounce 1.2s infinite"></span>
+            <span style="width:8px;height:8px;background:#1a73e8;border-radius:50%;animation:aiDotBounce 1.2s infinite .2s"></span>
+            <span style="width:8px;height:8px;background:#1a73e8;border-radius:50%;animation:aiDotBounce 1.2s infinite .4s"></span>
+        </div>
+        <span class="loading-text" style="font-size:.82rem;color:#6c757d">AI 分析中...</span>
+    </div>
+</template>
+<style>
+@keyframes aiDotBounce { 0%,80%,100%{transform:scale(0)} 40%{transform:scale(1)} }
+</style>
+
+<!-- 工具参数详情面板 (点击工具名展开) -->
+<div class="modal fade" id="toolParamModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h6 class="modal-title" id="toolParamTitle">
+                    <i class="bi bi-gear"></i> 工具参数
+                </h6>
+                <button type="button" class="btn-close btn-close-sm" data-bs-dismiss="modal"></button>
+            </div>
+            <form hx-post="{{ url_for('mcp.mcp_execute') }}"
+                  hx-target="#result-body"
+                  hx-swap="afterbegin"
+                  id="toolParamForm"
+                  onsubmit="if(window._toolModal) window._toolModal.hide(); clearResults('tool', document.getElementById('toolParamToolName').value);">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-body">
+                    <input type="hidden" name="tool" id="toolParamToolName" value="">
+                    <div id="toolParamFields"></div>
+                    <div id="toolParamEmpty" class="text-center text-muted py-3">
+                        此工具无需额外参数，直接执行即可
+                    </div>
+                </div>
+                <div class="modal-footer py-2">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" class="btn btn-sm btn-primary">
+                        <i class="bi bi-play-fill"></i> 执行
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+// ===== 工具数据 (从后端传入) =====
+var toolData = {};
+{% for tool in tools %}
+toolData['{{ tool.name }}'] = {{ tool | tojson }};
+{% endfor %}
+
+var execCount = 0;
+
+// ===== 面板状态持久化 (sessionStorage, 按用户隔离) =====
+// 以当前用户 ID 为 key，避免同一浏览器切换账号时串号看到他人的执行结果
+var _USER_ID = {{ current_user.id }};
+var _STORAGE_KEY = 'mcp_panel_state_' + _USER_ID;
+
+// 清理升级前遗留的全局 key (无用户隔离)
+try { sessionStorage.removeItem('mcp_panel_state'); } catch(e) {}
+
+function savePanelState() {
+    try {
+        var body = document.getElementById('result-body');
+        if (!body) return;
+        sessionStorage.setItem(_STORAGE_KEY, JSON.stringify({
+            html: body.innerHTML,
+            count: execCount
+        }));
+    } catch(e) { /* quota exceeded, ignore */ }
+}
+
+function restorePanelState() {
+    try {
+        var raw = sessionStorage.getItem(_STORAGE_KEY);
+        if (!raw) return false;
+        var state = JSON.parse(raw);
+        if (!state || !state.html) return false;
+        var body = document.getElementById('result-body');
+        if (!body) return false;
+        body.innerHTML = state.html;
+        execCount = state.count || 0;
+        document.getElementById('exec-count').textContent = String(execCount);
+        // 恢复代码高亮
+        if (window.hljs) {
+            body.querySelectorAll('pre code:not(.hljs)').forEach(function(el) {
+                hljs.highlightElement(el);
+            });
+        }
+        return true;
+    } catch(e) { return false; }
+}
+
+function clearPanelState() {
+    try { sessionStorage.removeItem(_STORAGE_KEY); } catch(e) {}
+}
+
+// 立即恢复面板状态 (不等 hljs，先展示内容)
+restorePanelState();
+
+// ===== 加载消息映射 =====
+var loadingMsgs = {
+    '/mcp/execute': '工具执行中...',
+    '/mcp/analysis': '正在执行完整分析计划...'
+};
+
+// ===== HTMX 请求前: 注入加载动画到结果面板 =====
+document.body.addEventListener('htmx:beforeRequest', function(evt) {
+    var form = evt.detail.elt;
+    if (!form || !form.getAttribute) return;
+    var target = form.getAttribute('hx-target');
+    if (target !== '#result-body') return;
+
+    // 隐藏空状态
+    var empty = document.getElementById('empty-state');
+    if (empty) empty.style.display = 'none';
+
+    // 注入加载动画
+    var tpl = document.getElementById('loading-tpl');
+    if (tpl) {
+        var clone = tpl.content.cloneNode(true);
+        var path = form.getAttribute('hx-post') || '';
+        var msg = loadingMsgs[path] || 'AI 分析中...';
+        var textEl = clone.querySelector('.loading-text');
+        if (textEl) textEl.textContent = msg;
+        var body = document.getElementById('result-body');
+        body.insertBefore(clone, body.firstChild);
+        // 滚动到顶部 (最新结果在上)
+        body.scrollTop = 0;
+    }
+});
+
+// ===== HTMX 请求后: 移除加载动画 =====
+document.body.addEventListener('htmx:afterRequest', function(evt) {
+    document.querySelectorAll('.ai-loading-inject').forEach(function(el) { el.remove(); });
+});
+
+// ===== HTMX 完成后: 更新计数 + 高亮代码 + 持久化 =====
+document.body.addEventListener('htmx:afterSettle', function(evt) {
+    if (evt.detail.target && evt.detail.target.id === 'result-body') {
+        execCount++;
+        document.getElementById('exec-count').textContent = String(execCount);
+        // 滚动到顶部 (最新结果在上)
+        var body = document.getElementById('result-body');
+        body.scrollTop = 0;
+        // 高亮代码块 (如果 highlight.js 已加载)
+        if (window.hljs) {
+            evt.detail.target.querySelectorAll('pre code:not(.hljs)').forEach(function(el) {
+                hljs.highlightElement(el);
+            });
+        }
+        // 持久化到 sessionStorage
+        savePanelState();
+    }
+});
+
+// ===== 选择工具: 高亮 + 打开参数弹窗 =====
+function selectTool(name) {
+    document.querySelectorAll('.mcp-tool-item').forEach(function(el) { el.classList.remove('active'); });
+    var item = document.getElementById('tool-item-' + name);
+    if (item) item.classList.add('active');
+
+    var tool = toolData[name];
+    if (!tool) return;
+
+    document.getElementById('toolParamToolName').value = name;
+    document.getElementById('toolParamTitle').innerHTML =
+        '<i class="bi bi-gear"></i> ' + name + ' <small class="text-muted fw-normal">— ' + tool.description + '</small>';
+
+    var fieldsEl = document.getElementById('toolParamFields');
+    var emptyEl = document.getElementById('toolParamEmpty');
+    fieldsEl.innerHTML = '';
+
+    var hasParams = false;
+    if (tool.parameters) {
+        for (var pname in tool.parameters) {
+            if (pname === 'user_id') continue;
+            hasParams = true;
+            var pdef = tool.parameters[pname];
+            var required = pdef.required ? ' <span class="text-danger">*</span>' : '';
+            var reqAttr = pdef.required ? ' required' : '';
+            var html = '<div class="mb-2">' +
+                '<label class="form-label">' + pname + required + '</label>' +
+                '<input type="text" class="form-control form-control-sm" name="' + pname + '"' +
+                ' placeholder="' + (pdef.description || '') + '"' + reqAttr + '>' +
+                '</div>';
+            fieldsEl.insertAdjacentHTML('beforeend', html);
+        }
+    }
+
+    emptyEl.style.display = hasParams ? 'none' : 'block';
+    fieldsEl.style.display = hasParams ? 'block' : 'none';
+
+    var modal = new bootstrap.Modal(document.getElementById('toolParamModal'));
+    window._toolModal = modal;
+    modal.show();
+}
+
+// ===== 清空结果 (新执行时) =====
+function clearResults(type, name) {
+    var empty = document.getElementById('empty-state');
+    if (empty) empty.style.display = 'none';
+}
+
+// ===== 清空所有结果 =====
+function clearAllResults() {
+    var body = document.getElementById('result-body');
+    body.innerHTML = '<div class="mcp-empty" id="empty-state">' +
+        '<i class="bi bi-terminal"></i>' +
+        '<div>选择左侧工具执行</div>' +
+        '<div class="small mt-1">执行结果将在此处实时展示</div></div>';
+    execCount = 0;
+    document.getElementById('exec-count').textContent = '0';
+    clearPanelState();
+}
+
+// ===== MCP 分析结果动画 (htmx:afterSettle 触发, 兼容 HTMX 2.x 不执行片段内 script) =====
+document.body.addEventListener('htmx:afterSettle', function(evt) {
+    var target = evt.detail.target;
+    if (!target || target.id !== 'result-body') return;
+
+    // highlight.js 代码高亮
+    if (window.hljs) {
+        target.querySelectorAll('pre code:not(.hljs)').forEach(function(el) {
+            hljs.highlightElement(el);
+        });
+    }
+
+    // 风险圆环动画
+    target.querySelectorAll('.ai-ring-anim').forEach(function(el) {
+        var final = el.getAttribute('stroke-dashoffset');
+        var circ = el.getAttribute('stroke-dasharray');
+        el.style.strokeDashoffset = circ;
+        el.style.transition = 'stroke-dashoffset 1.2s ease-out';
+        setTimeout(function() { el.style.strokeDashoffset = final; }, 100);
+    });
+
+    // 进度条动画
+    target.querySelectorAll('.ai-rf-fill').forEach(function(el) {
+        var w = el.style.width;
+        el.style.width = '0%';
+        el.style.transition = 'width 0.8s ease-out';
+        setTimeout(function() { el.style.width = w; }, 200);
+    });
+});
+
+// ===== MCP 报告导出功能 (全局定义, 供 _plan_result.html 按钮调用) =====
+function getAIPlanData() {
+    var el = document.getElementById('ai-plan-data');
+    if (el) { try { return JSON.parse(el.textContent); } catch(e) {} }
+    return null;
+}
+
+function _serverExport(endpoint, format) {
+    var data = getAIPlanData();
+    if (!data) { showNotification('无可导出的分析数据', 'warning'); return; }
+    showNotification('正在生成 ' + format + ' 报告...', 'info');
+    fetch(endpoint, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+    }).then(function(resp) {
+        return resp.json().then(function(j) {
+            if (!resp.ok || !j.success) throw new Error(j.error || '生成失败');
+            return j;
+        });
+    }).then(function(j) {
+        // 不再直接下载到本地, 报告已保存到「我的报告」, 跳转过去查看
+        showNotification(format + ' 报告已保存到「我的报告」', 'success');
+        setTimeout(function() { window.location.href = '/report'; }, 1000);
+    }).catch(function(err) {
+        showNotification(format + ' 导出失败: ' + err.message, 'danger');
+    });
+}
+
+function aiExportPDF()  { _serverExport('/mcp/export-pdf',  'PDF'); }
+function aiExportMD()   { _serverExport('/mcp/export-md',   'Markdown'); }
+function aiExportJSON() { _serverExport('/mcp/export-json','JSON'); }
+
+function aiCopySummary() {
+    var data = getAIPlanData();
+    if (!data) { showNotification('无可复制内容', 'warning'); return; }
+    var text = data.summary || 'AI 分析完成: ' + (data.tools_executed || data.planned_tools || []).join(', ');
+    navigator.clipboard.writeText(text).then(function() {
+        showNotification('分析摘要已复制到剪贴板', 'success');
+    }).catch(function() {
+        showNotification('复制失败，请手动选择', 'danger');
+    });
+}
+</script>
+{% endblock %}
+
+{% block extra_js %}
+<!-- highlight.js 预加载: 供 MCP 结果模板的代码高亮使用 -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/github-dark.min.css">
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>
+// hljs 加载完成后，对已恢复的面板内容重新高亮代码块
+(function() {
+    var body = document.getElementById('result-body');
+    if (body) {
+        body.querySelectorAll('pre code:not(.hljs)').forEach(function(el) {
+            hljs.highlightElement(el);
+        });
+    }
+})();
+</script>
+{% endblock %}

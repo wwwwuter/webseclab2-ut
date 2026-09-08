@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+
+{% block title %}我的实验 - WebSecLab{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{{ url_for('main.index') }}">首页</a></li>
+        <li class="breadcrumb-item active">我的实验</li>
+    </ol>
+</nav>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-flask"></i> 我的实验</h2>
+    <a href="{{ url_for('exp.exp_create') }}" class="btn btn-primary">
+        <i class="bi bi-plus-circle"></i> 创建实验
+    </a>
+</div>
+
+<!-- 统计 -->
+<div class="row mb-4">
+    <div class="col-md-2 mb-2">
+        <div class="card text-center border-secondary"><div class="card-body py-2">
+            <h5 class="mb-0">{{ stats.total }}</h5><small class="text-muted">全部</small>
+        </div></div>
+    </div>
+    <div class="col-md-2 mb-2">
+        <div class="card text-center border-secondary"><div class="card-body py-2">
+            <h5 class="text-secondary mb-0">{{ stats.created }}</h5><small class="text-muted">已创建</small>
+        </div></div>
+    </div>
+    <div class="col-md-2 mb-2">
+        <div class="card text-center border-primary"><div class="card-body py-2">
+            <h5 class="text-primary mb-0">{{ stats.running }}</h5><small class="text-muted">进行中</small>
+        </div></div>
+    </div>
+    <div class="col-md-2 mb-2">
+        <div class="card text-center border-success"><div class="card-body py-2">
+            <h5 class="text-success mb-0">{{ stats.success }}</h5><small class="text-muted">已完成</small>
+        </div></div>
+    </div>
+    <div class="col-md-2 mb-2">
+        <div class="card text-center border-danger"><div class="card-body py-2">
+            <h5 class="text-danger mb-0">{{ stats.failed }}</h5><small class="text-muted">失败</small>
+        </div></div>
+    </div>
+    <div class="col-md-2 mb-2">
+        <div class="card text-center border-dark"><div class="card-body py-2">
+            <h5 class="text-dark mb-0">{{ stats.success + stats.failed }}</h5><small class="text-muted">已完成</small>
+        </div></div>
+    </div>
+</div>
+
+<!-- 筛选 / 搜索 / 排序 (HTMX 无刷新) -->
+<form class="row g-2 align-items-end mb-3"
+      hx-get="{{ url_for('exp.exp_list') }}"
+      hx-target="#exp-results"
+      hx-swap="innerHTML"
+      hx-push-url="true"
+      hx-indicator="#exp-search-spinner">
+    <div class="col-md-4">
+        <label class="form-label">搜索</label>
+        <div class="input-group">
+            <input type="text" name="q" class="form-control"
+                   placeholder="实验名称 / Token..." value="{{ keyword|default('') }}"
+                   hx-trigger="keyup changed delay:300ms"
+                   hx-get="{{ url_for('exp.exp_list') }}"
+                   hx-target="#exp-results" hx-swap="innerHTML" hx-push-url="true"
+                   hx-indicator="#exp-search-spinner" autocomplete="off">
+            <span class="input-group-text htmx-indicator" id="exp-search-spinner">
+                <span class="spinner-border spinner-border-sm"></span>
+            </span>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <label class="form-label" for="exp-status">状态</label>
+        <select id="exp-status" name="status" class="form-select" hx-trigger="change">
+            <option value="">全部</option>
+            {% set status_labels = {'created':'等待中', 'running':'进行中', 'success':'成功', 'failed':'失败', 'closed':'已关闭'} %}
+            {% for s in ['created', 'running', 'success', 'failed', 'closed'] %}
+            <option value="{{ s }}" {% if status == s %}selected{% endif %}>{{ status_labels[s] }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-md-2">
+        <label class="form-label" for="exp-dvwa">DVWA等级</label>
+        <select id="exp-dvwa" name="dvwa_level" class="form-select" hx-trigger="change">
+            <option value="">全部</option>
+            <option value="low" {% if dvwa_level == 'low' %}selected{% endif %}>Low</option>
+            <option value="medium" {% if dvwa_level == 'medium' %}selected{% endif %}>Medium</option>
+            <option value="high" {% if dvwa_level == 'high' %}selected{% endif %}>High</option>
+            <option value="impossible" {% if dvwa_level == 'impossible' %}selected{% endif %}>Impossible</option>
+        </select>
+    </div>
+    <div class="col-md-2">
+        <label class="form-label" for="exp-sort">排序</label>
+        <select id="exp-sort" name="sort" class="form-select" hx-trigger="change">
+            <option value="" {% if not sort_by %}selected{% endif %}>最新创建</option>
+            <option value="status" {% if sort_by == 'status' %}selected{% endif %}>状态</option>
+            <option value="dvwa_level" {% if sort_by == 'dvwa_level' %}selected{% endif %}>DVWA等级</option>
+        </select>
+    </div>
+    <div class="col-md-2">
+        <button type="submit" class="btn btn-primary w-100">
+            <i class="bi bi-search"></i> 筛选
+        </button>
+    </div>
+</form>
+
+<!-- 实验卡片列表 (可被 HTMX 局部刷新) -->
+<div id="exp-results">
+    {% include "experiment/_list_results.html" %}
+</div>
+{% endblock %}

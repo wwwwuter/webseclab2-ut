@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+
+{% block title %}创建实验 - WebSecLab{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{{ url_for('main.index') }}">首页</a></li>
+        <li class="breadcrumb-item"><a href="{{ url_for('exp.exp_list') }}">我的实验</a></li>
+        <li class="breadcrumb-item active">创建实验</li>
+    </ol>
+</nav>
+
+<h2 class="mb-4"><i class="bi bi-plus-circle"></i> 创建实验</h2>
+
+<div class="card shadow-sm">
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('exp.exp_create') }}" class="needs-validation" novalidate>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="mb-3">
+                <label for="experiment_name" class="form-label">实验名称 <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" id="experiment_name" name="experiment_name"
+                       maxlength="128" minlength="2" placeholder="如: DVWA SQL注入实验" required>
+                <div class="invalid-feedback">请输入至少 2 个字符的实验名称</div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="vulnerability_id" class="form-label">关联漏洞</label>
+                    <select id="vulnerability_id" name="vulnerability_id" class="form-select">
+                        <option value="">-- 选择漏洞 --</option>
+                        {% for group in vulns_by_cat %}
+                        <optgroup label="{{ group.category.name if group.category else '未分类' }}">
+                            {% for vuln in group['items'] %}
+                            <option value="{{ vuln.id }}" {% if prefill_vuln_id == vuln.id %}selected{% endif %}>
+                                {{ vuln.name }}{% if vuln.cve %} ({{ vuln.cve }}){% endif %} - {{ vuln.severity }}
+                            </option>
+                            {% endfor %}
+                        </optgroup>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label for="dvwa_level" class="form-label">DVWA安全等级</label>
+                    <select id="dvwa_level" name="dvwa_level" class="form-select">
+                        <option value="low">Low - 低安全(无防护)</option>
+                        <option value="medium">Medium - 中等安全(部分防护)</option>
+                        <option value="high">High - 高安全(严格防护)</option>
+                        <option value="impossible">Impossible - 最高安全(完全防护)</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label for="target" class="form-label">DVWA目标地址</label>
+                <input type="url" class="form-control" id="target" name="target"
+                       placeholder="http://192.168.56.101/dvwa" value="http://192.168.56.101/dvwa">
+                <div class="form-text">输入DVWA实验环境的访问地址</div>
+            </div>
+
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-flask"></i> 创建实验
+                </button>
+                <a href="{{ url_for('exp.exp_list') }}" class="btn btn-outline-secondary">取消</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    // Bootstrap 客户端校验
+    (function () {
+        'use strict';
+        var form = document.querySelector('#exp-create-form') || document.querySelector('form.needs-validation');
+        if (!form) return;
+        form.id = form.id || 'exp-create-form';
+        form.addEventListener('submit', function (event) {
+            if (!form.checkValidity()) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            form.classList.add('was-validated');
+        }, false);
+    })();
+</script>
+{% endblock %}

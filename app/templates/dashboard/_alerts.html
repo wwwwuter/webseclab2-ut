@@ -1,0 +1,17 @@
+{# 异常告警片段 - 供 HTMX 局部刷新 #}
+{% if alerts %}
+  {% for a in alerts %}
+  <div class="alert alert-{% if a.level == 'critical' %}danger{% else %}warning{% endif %} d-flex justify-content-between align-items-center py-2 mb-2" role="alert">
+    <div>
+      <strong><i class="bi bi-exclamation-triangle-fill"></i> {{ a.title }}</strong>
+      <span class="ms-2">{{ a.detail }}</span>
+      <small class="text-muted ms-2">{{ a.time }}</small>
+    </div>
+    <a href="{{ a.link }}" class="btn btn-sm btn-outline-{% if a.level == 'critical' %}light{% else %}dark{% endif %}">查看</a>
+  </div>
+  {% endfor %}
+{% else %}
+  <div class="alert alert-success d-flex align-items-center py-2 mb-0" role="alert">
+    <i class="bi bi-shield-check me-2"></i> 系统运行平稳，未检测到异常。
+  </div>
+{% endif %}

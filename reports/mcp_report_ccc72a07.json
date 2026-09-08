@@ -1,0 +1,86 @@
+{
+  "report_type": "mcp_analysis",
+  "generated_at": "2026-09-08T14:58:33.310387",
+  "platform": "WebSecLab v3.0",
+  "query": "扫描目标 192.168.1.1",
+  "summary": "**风险等级**: 高风险 (72.5/100)\n- 发现 2 个高危漏洞\n- 开放端口: 22(ssh), 80(http), 443(https)",
+  "tools_executed": [
+    "dashboard",
+    "scanner",
+    "knowledge",
+    "risk"
+  ],
+  "results": {
+    "dashboard": {
+      "success": true,
+      "data": {
+        "experiments": 3,
+        "scans": 5,
+        "ai_analyses": 2,
+        "reports": 4
+      }
+    },
+    "scanner": {
+      "success": true,
+      "data": {
+        "target": "192.168.1.1",
+        "task_id": 10,
+        "scan_type": "socket",
+        "latest_completed": {
+          "ports": [
+            {
+              "port": 22,
+              "service": "ssh"
+            },
+            {
+              "port": 80,
+              "service": "http"
+            },
+            {
+              "port": 443,
+              "service": "https"
+            }
+          ]
+        }
+      }
+    },
+    "knowledge": {
+      "success": true,
+      "data": {
+        "vulnerabilities": [
+          {
+            "name": "SQL 注入漏洞",
+            "severity": "Critical",
+            "cve": "CVE-2024-0001",
+            "category": "Injection",
+            "description": "SQL 注入攻击",
+            "attack_method": "UNION 注入",
+            "solution": "使用参数化查询"
+          },
+          {
+            "name": "XSS 跨站脚本",
+            "severity": "High",
+            "category": "XSS",
+            "description": "反射型 XSS"
+          }
+        ],
+        "statistics": {
+          "total": 15
+        }
+      }
+    },
+    "risk": {
+      "success": true,
+      "data": {
+        "final_score": 72.5,
+        "risk_level": "high",
+        "risk_label": "高风险",
+        "cvss": 8.5,
+        "asset": 7.0,
+        "exploit": 8.0,
+        "exposure": 6.0,
+        "ai_confidence": 8.0
+      }
+    }
+  }
+}

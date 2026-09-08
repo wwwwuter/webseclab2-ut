@@ -1,0 +1,273 @@
+/* ============================================================
+   WebSecLab v3.0 — 深色栏 + 浅色内容主题 (static/css/soc.css)
+   配合 <html data-bs-theme="light"> 使用
+   设计: 侧边栏 #1F2937 / 顶部栏 #111827 (深色栏)
+         内容区 #F5F7FA / 卡片 #fff (浅色内容)
+   布局（左侧固定导航 + 顶部栏）保持不变，仅改配色
+   ============================================================ */
+
+:root {
+  --soc-bg: #f5f7fa;            /* 内容区背景 */
+  --soc-sidebar: #1f2937;       /* 侧边栏 (深) */
+  --soc-sidebar-2: #111827;     /* 侧边栏更深 */
+  --soc-topbar: #111827;        /* 顶部栏 (深) */
+  --soc-topbar-text: #e5e7eb;
+  --soc-topbar-muted: #9ca3af;
+  --soc-sidebar-text: #cbd5e1;
+  --soc-sidebar-muted: #94a3b8;
+  --soc-card: #ffffff;
+  --soc-border: #e6e9f0;
+  --soc-text: #1f2937;
+  --soc-muted: #6b7280;
+  --soc-accent: #3b82f6;        /* 蓝 */
+  --soc-accent-2: #06b6d4;      /* 青 */
+  --soc-success: #16a34a;
+  --soc-danger: #dc2626;
+  --soc-warning: #d97706;
+  --soc-sidebar-w: 248px;
+}
+
+html[data-bs-theme="light"] body {
+  background-color: var(--soc-bg);
+  color: var(--soc-text);
+  min-height: 100vh;
+}
+
+/* ---------- 整体布局 ---------- */
+.soc-shell { display: flex; min-height: 100vh; }
+
+/* ---------- 左侧导航 (深色) ---------- */
+.soc-sidebar {
+  width: var(--soc-sidebar-w);
+  flex: 0 0 var(--soc-sidebar-w);
+  background: linear-gradient(180deg, var(--soc-sidebar) 0%, var(--soc-sidebar-2) 100%);
+  position: fixed;
+  top: 0; bottom: 0; left: 0;
+  display: flex;
+  flex-direction: column;
+  z-index: 1040;
+  overflow-y: auto;
+}
+.soc-sidebar .brand {
+  display: flex; align-items: center; gap: .6rem;
+  padding: 0 1.1rem; height: 64px;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+  color: #f8fafc; text-decoration: none;
+  flex: 0 0 64px;
+}
+.soc-sidebar .brand .logo {
+  width: 34px; height: 34px; border-radius: 9px;
+  background: linear-gradient(135deg, var(--soc-accent), var(--soc-accent-2));
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 1.1rem;
+}
+.soc-sidebar .brand .title { font-weight: 700; font-size: 1.05rem; line-height: 1.1; }
+.soc-sidebar .brand .sub { font-size: .68rem; color: var(--soc-sidebar-muted); }
+
+.soc-nav { padding: .6rem .6rem; flex: 1; }
+.soc-nav .nav-link {
+  display: flex; align-items: center; gap: .7rem;
+  color: var(--soc-sidebar-muted); border-radius: 8px;
+  padding: .56rem .8rem; margin-bottom: .15rem;
+  font-size: .92rem; border-left: 3px solid transparent;
+  text-decoration: none;
+}
+.soc-nav .nav-link i { font-size: 1.05rem; }
+.soc-nav .nav-link:hover { background: rgba(255,255,255,.07); color: #f1f5f9; }
+.soc-nav .nav-link.active {
+  background: rgba(59,130,246,.18); color: #fff;
+  border-left-color: var(--soc-accent); font-weight: 600;
+}
+.soc-nav .nav-link.admin { color: #fca5a5; }
+.soc-nav .nav-link.admin:hover { background: rgba(220,38,38,.14); color: #fecaca; }
+.soc-nav .nav-link.admin.active { background: rgba(220,38,38,.2); border-left-color: #ef4444; color: #fff; }
+
+.soc-sidebar .sidebar-footer {
+  padding: .8rem 1rem; border-top: 1px solid rgba(255,255,255,.08);
+  font-size: .72rem; color: var(--soc-sidebar-muted);
+}
+
+/* ---------- 主区域 ---------- */
+.soc-main {
+  flex: 1; margin-left: var(--soc-sidebar-w);
+  display: flex; flex-direction: column; min-width: 0; min-height: 100vh;
+}
+.soc-topbar {
+  position: sticky; top: 0; height: 60px; z-index: 1030;
+  background: var(--soc-topbar);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 1.25rem;
+}
+.soc-topbar .page-title { font-weight: 600; font-size: 1rem; color: var(--soc-topbar-text); }
+.soc-topbar .topbar-user { display: flex; align-items: center; gap: .6rem; color: var(--soc-topbar-muted); font-size: .9rem; }
+.soc-topbar .topbar-user span.username { color: var(--soc-topbar-text); }
+.soc-topbar .hamburger {
+  display: none; background: none; border: 0; color: var(--soc-topbar-text);
+  font-size: 1.35rem; padding: .2rem .4rem; border-radius: 6px;
+}
+.soc-topbar .hamburger:hover { background: rgba(255,255,255,.08); }
+
+.soc-content { flex: 1; padding: 1.5rem; width: 100%; }
+.soc-footer {
+  padding: .9rem 1.25rem; border-top: 1px solid var(--soc-border);
+  color: var(--soc-muted); font-size: .8rem; text-align: center;
+  background: #eef1f6;
+}
+
+/* ---------- 卡片 / 表单 (浅色内容覆盖) ---------- */
+html[data-bs-theme="light"] .card {
+  background: var(--soc-card); border-color: var(--soc-border); color: var(--soc-text);
+  box-shadow: 0 1px 2px rgba(15,23,42,.04);
+}
+html[data-bs-theme="light"] .card-header {
+  background: #f8fafc; border-color: var(--soc-border);
+}
+html[data-bs-theme="light"] .table { color: var(--soc-text); }
+html[data-bs-theme="light"] .table thead th { border-color: var(--soc-border); color: var(--soc-muted); }
+html[data-bs-theme="light"] .table td, html[data-bs-theme="light"] .table th { border-color: var(--soc-border); }
+html[data-bs-theme="light"] a:not(.btn):not(.nav-link):not(.dropdown-item):not(.page-link):not(.breadcrumb-item):not(.quick-btn):not(.admin-toggle) { color: var(--soc-accent); }
+html[data-bs-theme="light"] a.text-reset, html[data-bs-theme="light"] a.link-secondary { color: var(--soc-muted) !important; }
+html[data-bs-theme="light"] .text-muted { color: var(--soc-muted) !important; }
+html[data-bs-theme="light"] .form-control, html[data-bs-theme="light"] .form-select {
+  background: #fff; border-color: var(--soc-border); color: var(--soc-text);
+}
+html[data-bs-theme="light"] .form-control:focus, html[data-bs-theme="light"] .form-select:focus {
+  background: #fff; border-color: var(--soc-accent); color: var(--soc-text);
+  box-shadow: 0 0 0 .2rem rgba(59,130,246,.2);
+}
+html[data-bs-theme="light"] .form-control::placeholder { color: #9ca3af; }
+html[data-bs-theme="light"] .modal-content { background: var(--soc-card); border-color: var(--soc-border); color: var(--soc-text); }
+html[data-bs-theme="light"] .modal-header, html[data-bs-theme="light"] .modal-footer { border-color: var(--soc-border); }
+html[data-bs-theme="light"] .page-link { background: var(--soc-card); border-color: var(--soc-border); color: var(--soc-accent); }
+html[data-bs-theme="light"] .page-item.active .page-link { background: var(--soc-accent); border-color: var(--soc-accent); color: #fff; }
+html[data-bs-theme="light"] .page-item.disabled .page-link { background: var(--soc-card); border-color: var(--soc-border); color: #9ca3af; }
+html[data-bs-theme="light"] .dropdown-menu { background: var(--soc-card); border-color: var(--soc-border); box-shadow: 0 4px 16px rgba(15,23,42,.08); }
+html[data-bs-theme="light"] .dropdown-item { color: var(--soc-text); }
+html[data-bs-theme="light"] .dropdown-item:hover { background: #f1f5f9; color: var(--soc-text); }
+html[data-bs-theme="light"] .list-group-item { background: var(--soc-card); border-color: var(--soc-border); color: var(--soc-text); }
+html[data-bs-theme="light"] .alert { color: var(--soc-text); }
+html[data-bs-theme="light"] .breadcrumb-item, html[data-bs-theme="light"] .breadcrumb-item a { color: var(--soc-muted); }
+html[data-bs-theme="light"] hr { border-color: var(--soc-border); }
+html[data-bs-theme="light"] .btn-close { filter: none; }
+
+/* ==========================================================
+   按钮与标签文字色 — 核心原则：彩色背景上文字必须是白色或深色
+   覆盖所有场景: 实心按钮 / 描边按钮(含激活态) / 徽章 / 自定义标签
+   ========================================================== */
+
+/* 1) 实心按钮 → 白字 (覆盖全局 a{} 继承的蓝色) */
+html[data-bs-theme="light"] .btn-primary,
+html[data-bs-theme="light"] .btn-success,
+html[data-bs-theme="light"] .btn-danger,
+html[data-bs-theme="light"] .btn-warning,
+html[data-bs-theme="light"] .btn-info,
+html[data-bs-theme="light"] .btn-dark {
+  color: #fff !important;
+}
+
+/* 2) 描边按钮 — 正常态保留 Bootstrap 原始配色, 不加 !important */
+/*    激活态(.active/.checked)Bootstrap 会自动变实心底+白字, 不干预 */
+/*    (删除之前的 !important 强制色, 它会破坏激活态白字) */
+
+/* 3) 按钮组 checkbox 激活态保险补丁 — 确保选中后实心底=白字 */
+html[data-bs-theme="light"] .btn-check:checked + .btn-outline-primary,
+html[data-bs-theme="light"] .btn-check:checked + .btn-outline-success,
+html[data-bs-theme="light"] .btn-check:checked + .btn-outline-danger,
+html[data-bs-theme="light"] .btn-check:checked + .btn-outline-warning,
+html[data-bs-theme="light"] .btn-check:checked + .btn-outline-info,
+html[data-bs-theme="light"] .btn-check:checked + .btn-outline-dark,
+html[data-bs-theme="light"] .btn.active.btn-outline-primary,
+html[data-bs-theme="light"] .btn.active.btn-outline-success,
+html[data-bs-theme="light"] .btn.active.btn-outline-danger,
+html[data-bs-theme="light"] .btn.active.btn-outline-warning,
+html[data-bs-theme="light"] .btn.active.btn-outline-info {
+  color: #fff !important;
+}
+
+/* 4) Badge 徽章 — 彩底白字 */
+html[data-bs-theme="light"] .badge.bg-primary,
+html[data-bs-theme="light"] .badge.bg-success,
+html[data-bs-theme="light"] .badge.bg-danger,
+html[data-bs-theme="light"] .badge.bg-warning,
+html[data-bs-theme="light"] .badge.bg-info,
+html[data-bs-theme="light"] .badge.bg-dark,
+html[data-bs-theme="light"] .badge.bg-secondary {
+  color: #fff !important;
+}
+
+/* 5) 自定义内联彩色背景的元素 — 白字兜底 (如 dashboard 的 sev/qi/tag 等) */
+html[data-bs-theme="light"] [style*="background:#dc2626"],
+html[data-bs-theme="light"] [style*="background:#ef4444"],
+html[data-bs-theme="light"] [style*="background:rgb(220,38,38)"],
+html[data-bs-theme="light"] [style*="background:rgba(220,38,38"],
+html[data-bs-theme="light"] [style*="background:#16a34a"],
+html[data-bs-theme="light"] [style*="background:#22c55e"],
+html[data-bs-theme="light"] [style*="background:rgba(22,163,74"],
+html[data-bs-theme="light"] [style*="background:#3b82f6"],
+html[data-bs-theme="light"] [style*="background:rgba(59,130,246"],
+html[data-bs-theme="light"] [style*="background:#f97316"],
+html[data-bs-theme="light"] [style*="background:#fd7e14"],
+html[data-bs-theme="light"] [style*="background:#eab308"],
+html[data-bs-theme="light"] [style*="background:#d97706"],
+html[data-bs-theme="light"] [style*="background:#06b6d4"],
+html[data-bs-theme="light"] [style*="background:rgba(6,182,212"],
+html[data-bs-theme="light"] [style*="background:#a855f7"],
+html[data-bs-theme="light"] [style*="background:rgba(168,85,247"],
+html[data-bs-theme="light"] [style*="background:#6f42c1"],
+html[data-bs-theme="light"] .sev { /* dashboard severity badge */
+  color: #fff !important;
+}
+
+/* 强调色工具类 */
+.soc-text-accent { color: var(--soc-accent); }
+.soc-text-cyan { color: var(--soc-accent-2); }
+.soc-text-success { color: var(--soc-success); }
+.soc-text-danger { color: var(--soc-danger); }
+.soc-text-warning { color: var(--soc-warning); }
+.soc-border-accent { border-color: var(--soc-accent) !important; }
+
+/* ---------- Toast 通知 ---------- */
+.toast-container { position: fixed; top: 72px; right: 20px; z-index: 1090; max-width: 420px; }
+.toast { margin-bottom: 8px; border-left: 4px solid; background: var(--soc-card); color: var(--soc-text); box-shadow: 0 4px 16px rgba(15,23,42,.12); }
+.toast-success { border-left-color: var(--soc-success); }
+.toast-danger  { border-left-color: var(--soc-danger); }
+.toast-warning { border-left-color: var(--soc-warning); }
+.toast-info    { border-left-color: var(--soc-accent-2); }
+
+/* ---------- 漏洞正文 / 实验时间线 (浅色覆盖) ---------- */
+.vuln-text code { background-color: #f1f5f9; color: #db2777; padding: .1em .35em; border-radius: 4px; font-size: .9em; }
+.vuln-text pre { background-color: #f1f5f9; font-size: .875rem; overflow-x: auto; margin: .5rem 0; padding: .75rem; border-radius: 6px; }
+.vuln-text pre code { background: none; color: inherit; padding: 0; }
+
+.exp-timeline { position: relative; padding-left: 1.25rem; }
+.exp-timeline::before { content: ''; position: absolute; left: .4rem; top: .25rem; bottom: .25rem; width: 2px; background: var(--soc-border); }
+.exp-timeline .tl-item { position: relative; padding-bottom: .9rem; }
+.exp-timeline .tl-item:last-child { padding-bottom: 0; }
+.exp-timeline .tl-item::before {
+  content: ''; position: absolute; left: -1.05rem; top: .3rem;
+  width: .6rem; height: .6rem; border-radius: 50%;
+  background: var(--soc-accent); border: 2px solid var(--soc-bg); box-shadow: 0 0 0 1px var(--soc-accent);
+}
+.exp-timeline .tl-time { font-size: .78rem; color: var(--soc-muted); }
+
+.token-copy-btn { cursor: pointer; }
+
+/* ---------- 滚动条 ---------- */
+.soc-sidebar::-webkit-scrollbar { width: 6px; }
+.soc-sidebar::-webkit-scrollbar-thumb { background: rgba(255,255,255,.18); border-radius: 3px; }
+.soc-sidebar::-webkit-scrollbar-track { background: transparent; }
+.soc-content::-webkit-scrollbar { width: 8px; }
+.soc-content::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+
+/* ---------- 移动端 ---------- */
+.soc-backdrop { display: none; }
+@media (max-width: 991.98px) {
+  .soc-sidebar { transform: translateX(-100%); transition: transform .2s ease; }
+  .soc-sidebar.show { transform: translateX(0); box-shadow: 4px 0 24px rgba(15,23,42,.35); }
+  .soc-main { margin-left: 0; }
+  .soc-topbar .hamburger { display: inline-flex; }
+  .soc-backdrop.show {
+    display: block; position: fixed; inset: 0; z-index: 1035;
+    background: rgba(15,23,42,.5);
+  }
+}

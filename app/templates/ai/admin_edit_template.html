@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}编辑Prompt模板 - WebSecLab{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-10">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="bi bi-pencil-square"></i> 编辑模板: {{ template.name }}
+                    <code class="ms-2">{{ template.template_key }}</code>
+                </h5>
+                <div>
+                    <span class="badge bg-light text-dark me-2">v{{ template.version }}</span>
+                    {% if template.is_default %}
+                    <span class="badge bg-info">系统默认</span>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <!-- 模板名称 -->
+                    <div class="row mb-3">
+                        <div class="col-md-8">
+                            <label for="name" class="form-label">模板名称</label>
+                            <input type="text" class="form-control" id="name" name="name"
+                                   value="{{ template.name }}" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="scene" class="form-label">场景分类</label>
+                            <select class="form-select" id="scene" name="scene">
+                                <option value="general" {% if template.scene == 'general' %}selected{% endif %}>通用分析</option>
+                                <option value="sql_injection" {% if template.scene == 'sql_injection' %}selected{% endif %}>SQL注入</option>
+                                <option value="xss" {% if template.scene == 'xss' %}selected{% endif %}>XSS跨站脚本</option>
+                                <option value="file_upload" {% if template.scene == 'file_upload' %}selected{% endif %}>文件上传</option>
+                                <option value="command_injection" {% if template.scene == 'command_injection' %}selected{% endif %}>命令注入</option>
+                                <option value="scan" {% if template.scene == 'scan' %}selected{% endif %}>端口扫描</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- 描述 -->
+                    <div class="mb-3">
+                        <label for="description" class="form-label">模板描述</label>
+                        <input type="text" class="form-control" id="description" name="description"
+                               value="{{ template.description }}">
+                    </div>
+
+                    <!-- 可用变量 -->
+                    {% if template.variable_list %}
+                    <div class="mb-3">
+                        <label class="form-label">可用变量</label>
+                        <div class="bg-light p-3 rounded">
+                            {% for key, desc in template.variable_list.items() %}
+                            <span class="badge bg-secondary me-2 mb-1">
+                                <code>{'{{'} {{ key }} {{ '}}'}</code> - {{ desc }}
+                            </span>
+                            {% endfor %}
+                        </div>
+                        <div class="form-text">在模板中使用 <code>{'{{'}<i>变量名</i>{'}}'}</code> 引用动态数据</div>
+                    </div>
+                    {% endif %}
+
+                    <!-- 模板内容 -->
+                    <div class="mb-3">
+                        <label for="content" class="form-label">
+                            模板内容 <span class="text-danger">*</span>
+                        </label>
+                        <textarea class="form-control font-monospace" id="content" name="content"
+                                  rows="20" required
+                                  style="font-size: 13px; line-height: 1.5; tab-size: 4;">{{ template.content }}</textarea>
+                        <div class="form-text">
+                            模板将发送给AI模型。场景化模板在分析对应类型漏洞时自动选用。
+                        </div>
+                    </div>
+
+                    <!-- 启用状态 -->
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" class="form-check-input" id="is_active" name="is_active"
+                               {% if template.is_active %}checked{% endif %}>
+                        <label class="form-check-label" for="is_active">启用此模板</label>
+                        <div class="form-text">禁用后该场景将回退到通用模板</div>
+                    </div>
+
+                    <div class="d-grid gap-2 d-md-flex">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-lg"></i> 保存
+                        </button>
+                        <a href="{{ url_for('ai.admin_templates') }}" class="btn btn-outline-secondary">
+                            <i class="bi bi-x-lg"></i> 取消
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

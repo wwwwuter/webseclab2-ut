@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block title %}注册 - WebSecLab{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-5">
+        <div class="card shadow-sm">
+            <div class="card-body p-4">
+                <h3 class="card-title text-center mb-4">
+                    <i class="bi bi-person-plus"></i> 用户注册
+                </h3>
+                <form method="POST" action="{{ url_for('auth.register') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="mb-3">
+                        <label for="username" class="form-label">用户名</label>
+                        <input type="text" class="form-control" id="username" name="username"
+                               placeholder="3-64个字符" required autofocus>
+                    </div>
+                    <div class="mb-3">
+                        <label for="email" class="form-label">邮箱 <span class="text-muted">(选填)</span></label>
+                        <input type="email" class="form-control" id="email" name="email"
+                               placeholder="请输入邮箱地址">
+                    </div>
+                    <div class="mb-3">
+                        <label for="password" class="form-label">密码</label>
+                        <input type="password" class="form-control" id="password" name="password"
+                               placeholder="至少6位" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="confirm_password" class="form-label">确认密码</label>
+                        <input type="password" class="form-control" id="confirm_password" name="confirm_password"
+                               placeholder="再次输入密码" required>
+                    </div>
+                    <button type="submit" class="btn btn-success w-100 mb-3">注册</button>
+                    <div class="text-center">
+                        <span class="text-muted">已有账号？</span>
+                        <a href="{{ url_for('auth.login') }}">立即登录</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,245 @@
+{% extends 'base.html' %}
+{% block page_title %}个人中心{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{{ url_for('static', filename='css/profile.css') }}">{% endblock %}
+
+{% block content %}
+<div class="profile-wrap">
+
+    <!-- 模块一：基本资料（左头像 / 右双列资料） -->
+    <div class="card profile-card">
+        <div class="row g-0">
+            <div class="col-md-4 profile-avatar-col">
+                <div class="profile-avatar">
+                    {% if avatar_url %}
+                        <img src="{{ avatar_url }}" alt="头像">
+                    {% else %}
+                        <span>{{ (user.nickname or user.username)[0]|upper }}</span>
+                    {% endif %}
+                </div>
+                <div class="avatar-meta">
+                    <div class="avatar-name">{{ user.nickname or user.username }}</div>
+                    <div class="avatar-role">
+                        {% if user.is_admin() %}管理员{% else %}普通用户{% endif %}
+                    </div>
+                    <div class="avatar-last">
+                        最后登录：{{ last_login.strftime('%Y-%m-%d %H:%M') if last_login else '-' }}
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-8 profile-info-col">
+                <h4 class="profile-username" id="profile-name">
+                    {{ user.nickname or user.username }}
+                    {% if user.nickname %}<small class="text-muted">@{{ user.username }}</small>{% endif %}
+                </h4>
+                <div class="profile-meta-grid">
+                    <div class="meta-item"><span class="label">用户名</span><span class="value" id="v-username">{{ user.username }}</span></div>
+                    <div class="meta-item"><span class="label">昵称</span><span class="value" id="v-nickname">{{ user.nickname or '未设置' }}</span></div>
+                    <div class="meta-item"><span class="label">用户ID</span><span class="value" id="v-userid">{{ user.id }}</span></div>
+                    <div class="meta-item"><span class="label">角色</span>
+                        <span class="value" id="v-role">{% if user.is_admin() %}管理员{% else %}普通用户{% endif %}</span>
+                    </div>
+                    <div class="meta-item"><span class="label">邮箱</span><span class="value" id="v-email">{{ user.email or '未设置' }}</span></div>
+                    <div class="meta-item"><span class="label">注册时间</span>
+                        <span class="value" id="v-registered">{{ user.created_time.strftime('%Y-%m-%d') if user.created_time else '-' }}</span>
+                    </div>
+                    <div class="meta-item"><span class="label">最后登录</span>
+                        <span class="value" id="v-lastlogin">{{ last_login.strftime('%Y-%m-%d %H:%M') if last_login else '-' }}</span>
+                    </div>
+                    <div class="meta-item"><span class="label">在线状态</span>
+                        <span class="value online"><span class="dot-online"></span>在线</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-4">
+        <!-- 模块二：账号管理 -->
+        <div class="col-lg-4 mb-4">
+            <div class="card h-100">
+                <div class="card-header">账号管理</div>
+                <div class="card-body d-flex flex-column justify-content-center gap-2">
+                    <div class="btn-group w-100" role="group" aria-label="账号操作">
+                        <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editInfoModal">
+                            <i class="bi bi-sliders"></i> 修改资料
+                        </button>
+                        <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#changePwModal">
+                            <i class="bi bi-key"></i> 修改密码
+                        </button>
+                    </div>
+                    <button type="button" class="btn btn-outline-primary w-100" data-bs-toggle="modal" data-bs-target="#avatarModal">
+                        <i class="bi bi-camera"></i> 修改头像
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 模块三：我的数据 -->
+        <div class="col-lg-8 mb-4">
+            <div class="card h-100">
+                <div class="card-header">我的数据</div>
+                <div class="card-body">
+                    <div class="data-grid">
+                        <a class="data-card" href="{{ url_for('exp.exp_list') }}">
+                            <div class="num">{{ stats.experiment_count }}</div>
+                            <div class="lbl">实验</div>
+                        </a>
+                        <a class="data-card" href="{{ url_for('scan.scan_list') }}">
+                            <div class="num">{{ stats.scan_count }}</div>
+                            <div class="lbl">扫描</div>
+                        </a>
+                        <a class="data-card" href="{{ url_for('ai.ai_history') }}">
+                            <div class="num">{{ stats.ai_count }}</div>
+                            <div class="lbl">AI分析</div>
+                        </a>
+                        <a class="data-card" href="{{ url_for('report.report_list') }}">
+                            <div class="num">{{ stats.report_count }}</div>
+                            <div class="lbl">报告</div>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 模块四：最近登录 -->
+    <div class="card mb-4">
+        <div class="card-header">最近登录</div>
+        <div class="card-body">
+            {% if history %}
+            <div class="table-responsive">
+                <table class="table login-table align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>时间</th>
+                            <th>IP</th>
+                            <th>浏览器</th>
+                            <th>系统</th>
+                            <th>状态</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for h in history %}
+                        <tr>
+                            <td>{{ h.login_time.strftime('%Y-%m-%d %H:%M') if h.login_time else '' }}</td>
+                            <td>{{ h.ip_address or '-' }}</td>
+                            <td>{{ h.browser or '未知' }}</td>
+                            <td>{{ h.os or '未知' }}</td>
+                            <td><span class="badge bg-success-subtle text-success">成功</span></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-muted mb-0">暂无登录记录</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- 管理员：页面底部进入管理中心 -->
+    {% if user.is_admin() %}
+    <div class="profile-admin-bar">
+        <a href="{{ url_for('main.admin_panel') }}" class="btn btn-dark">
+            <i class="bi bi-gear-fill"></i> 进入管理中心
+        </a>
+    </div>
+    {% endif %}
+
+</div>
+
+<!-- ========== 修改资料 Modal ========== -->
+<div class="modal fade" id="editInfoModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-sliders me-2"></i>修改资料</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">昵称</label>
+                    <input type="text" class="form-control" id="mi-nickname" maxlength="32"
+                           value="{{ user.nickname or '' }}" placeholder="{{ user.username }}">
+                </div>
+                <div class="mb-0">
+                    <label class="form-label">邮箱</label>
+                    <input type="email" class="form-control" id="mi-email" value="{{ user.email or '' }}">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" id="mi-save"><i class="bi bi-check-lg"></i> 保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ========== 修改密码 Modal ========== -->
+<div class="modal fade" id="changePwModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-key me-2"></i>修改密码</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="cpw-form" autocomplete="off">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">当前密码</label>
+                        <input type="password" class="form-control" id="cpw-current" autocomplete="current-password">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">新密码</label>
+                        <input type="password" class="form-control" id="cpw-new" autocomplete="new-password">
+                    </div>
+                    <div class="mb-0">
+                        <label class="form-label">确认新密码</label>
+                        <input type="password" class="form-control" id="cpw-confirm" autocomplete="new-password">
+                        <div class="form-text text-danger d-none" id="cpw-mismatch">两次输入的新密码不一致</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary" id="cpw-save"><i class="bi bi-check-lg"></i> 保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- ========== 修改头像 Modal ========== -->
+<div class="modal fade" id="avatarModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-camera me-2"></i>修改头像</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body text-center">
+                <div class="profile-avatar lg mx-auto" id="av-preview-wrap">
+                    {% if avatar_url %}
+                        <img src="{{ avatar_url }}" id="av-preview" alt="头像">
+                    {% else %}
+                        <span id="av-initial">{{ (user.nickname or user.username)[0]|upper }}</span>
+                    {% endif %}
+                </div>
+                <label class="btn btn-outline-secondary btn-sm mt-3 mb-0">
+                    选择图片
+                    <input type="file" id="av-input" accept="image/png,image/jpeg,image/jpg" hidden>
+                </label>
+                <div class="form-text">支持 PNG / JPG / JPEG，最大 2MB</div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" id="av-save"><i class="bi bi-check-lg"></i> 保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/profile.js') }}"></script>
+{% endblock %}

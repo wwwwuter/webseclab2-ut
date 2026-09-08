@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+
+{% block title %}管理后台 - WebSecLab{% endblock %}
+
+{% block content %}
+<h2 class="mb-4"><i class="bi bi-gear"></i> 管理后台</h2>
+
+<!-- KRI 概览卡片 (用户维度) -->
+<div class="row g-3 mb-4">
+    <div class="col-6 col-lg-3">
+        <div class="card shadow-sm border-0 h-100">
+            <div class="card-body d-flex align-items-center">
+                <div class="rounded-circle bg-primary bg-opacity-10 p-3 me-3">
+                    <i class="bi bi-people-fill fs-4 text-primary"></i>
+                </div>
+                <div>
+                    <div class="text-muted small">总用户数</div>
+                    <div class="fs-3 fw-bold">{{ user_stats.total }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-lg-3">
+        <div class="card shadow-sm border-0 h-100">
+            <div class="card-body d-flex align-items-center">
+                <div class="rounded-circle bg-danger bg-opacity-10 p-3 me-3">
+                    <i class="bi bi-shield-lock-fill fs-4 text-danger"></i>
+                </div>
+                <div>
+                    <div class="text-muted small">管理员</div>
+                    <div class="fs-3 fw-bold">{{ user_stats.admins }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-lg-3">
+        <div class="card shadow-sm border-0 h-100">
+            <div class="card-body d-flex align-items-center">
+                <div class="rounded-circle bg-info bg-opacity-10 p-3 me-3">
+                    <i class="bi bi-person-fill fs-4 text-info"></i>
+                </div>
+                <div>
+                    <div class="text-muted small">普通用户</div>
+                    <div class="fs-3 fw-bold">{{ user_stats.normal }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-lg-3">
+        <div class="card shadow-sm border-0 h-100">
+            <div class="card-body d-flex align-items-center">
+                <div class="rounded-circle bg-success bg-opacity-10 p-3 me-3">
+                    <i class="bi bi-person-plus-fill fs-4 text-success"></i>
+                </div>
+                <div>
+                    <div class="text-muted small">今日新增</div>
+                    <div class="fs-3 fw-bold">{{ user_stats.today_new }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 快捷入口 (非 Tab 的管理功能) -->
+<div class="card shadow-sm mb-4">
+    <div class="card-header bg-dark text-white">
+        <i class="bi bi-grid-3x3-gap"></i> 管理入口
+    </div>
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-6 col-md-4 col-lg-2">
+                <a href="{{ url_for('dashboard.security_dashboard') }}" class="btn btn-outline-primary w-100 py-3">
+                    <i class="bi bi-speedometer2 d-block fs-3 mb-1"></i> 安全仪表盘
+                </a>
+            </div>
+            <div class="col-6 col-md-4 col-lg-2">
+                <a href="{{ url_for('vuln.admin_vuln_sync') }}" class="btn btn-outline-success w-100 py-3">
+                    <i class="bi bi-cloud-download d-block fs-3 mb-1"></i> NVD 同步
+                </a>
+            </div>
+            <div class="col-6 col-md-4 col-lg-2">
+                <a href="{{ url_for('ai.admin_templates') }}" class="btn btn-outline-secondary w-100 py-3">
+                    <i class="bi bi-sliders d-block fs-3 mb-1"></i> Prompt 模板
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 统一管理工作台: 三个管理员功能合并为 Tab -->
+{% set embed = true %}
+<ul class="nav nav-tabs mb-3" id="adminTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="tab-user-btn" data-bs-toggle="tab" data-bs-target="#tab-user"
+                type="button" role="tab" aria-controls="tab-user" aria-selected="true">
+            <i class="bi bi-people"></i> 用户管理
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tab-vuln-btn" data-bs-toggle="tab" data-bs-target="#tab-vuln"
+                type="button" role="tab" aria-controls="tab-vuln" aria-selected="false">
+            <i class="bi bi-bug"></i> 漏洞管理
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tab-exp-btn" data-bs-toggle="tab" data-bs-target="#tab-exp"
+                type="button" role="tab" aria-controls="tab-exp" aria-selected="false">
+            <i class="bi bi-flask"></i> 实验管理
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content" id="adminTabsContent">
+    <!-- 用户管理 -->
+    <div class="tab-pane fade show active" id="tab-user" role="tabpanel" aria-labelledby="tab-user-btn">
+        {% set pagination = user_pagination %}{% set keyword = user_keyword %}{% set role = user_role %}{% set sort_by = user_sort_by %}{% set order = user_order %}
+        {% include '_admin_user_section.html' %}
+    </div>
+
+    <!-- 漏洞管理 -->
+    <div class="tab-pane fade" id="tab-vuln" role="tabpanel" aria-labelledby="tab-vuln-btn">
+        {% set stats = vuln_stats %}{% set pagination = vuln_pagination %}{% set keyword = vuln_keyword %}{% set severity = vuln_severity %}{% set source = vuln_source %}{% set current_category = vuln_category %}{% set sort_by = vuln_sort_by %}{% set order = vuln_order %}{% set categories = vuln_categories %}
+        {% include 'vulnerability/_admin_section.html' %}
+    </div>
+
+    <!-- 实验管理 -->
+    <div class="tab-pane fade" id="tab-exp" role="tabpanel" aria-labelledby="tab-exp-btn">
+        {% set stats = exp_stats %}{% set pagination = exp_pagination %}{% set keyword = exp_keyword %}{% set status = exp_status %}{% set dvwa_level = exp_dvwa_level %}{% set sort_by = exp_sort_by %}{% set order = exp_order %}{% set dvwa_levels = exp_dvwa_levels %}
+        {% include 'experiment/_admin_section.html' %}
+    </div>
+</div>
+{% endblock %}

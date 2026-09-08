@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}新建扫描 - WebSecLab{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="bi bi-radar"></i> 新建端口扫描任务</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('scan.scan_create') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <!-- 目标IP -->
+                    <div class="mb-3">
+                        <label for="target" class="form-label">扫描目标 <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="target" name="target"
+                               placeholder="例如: 192.168.56.101" required
+                               value="{{ request.form.get('target', '') }}">
+                        <div class="form-text">输入目标IP地址或域名</div>
+                    </div>
+
+                    <!-- 扫描方式 -->
+                    <div class="mb-3">
+                        <label for="scan_type" class="form-label">扫描方式 <span class="text-danger">*</span></label>
+                        <select class="form-select" id="scan_type" name="scan_type">
+                            <option value="socket" selected>Socket扫描 (快速，无需Nmap)</option>
+                            {% if nmap_available %}
+                            <option value="nmap">Nmap扫描 (深度服务识别)</option>
+                            <option value="both">Socket + Nmap (融合扫描)</option>
+                            {% else %}
+                            <option value="nmap" disabled>Nmap扫描 (Nmap未安装)</option>
+                            <option value="both" disabled>Socket + Nmap (Nmap未安装)</option>
+                            {% endif %}
+                        </select>
+                        {% if not nmap_available %}
+                        <div class="form-text text-warning">
+                            <i class="bi bi-exclamation-triangle"></i> Nmap未检测到，仅支持Socket扫描
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- 端口范围 -->
+                    <div class="mb-3">
+                        <label for="port_range" class="form-label">端口范围 <span class="text-danger">*</span></label>
+                        <select class="form-select" id="port_range" name="port_range">
+                            <option value="common" selected>常用端口 (30个)</option>
+                            <option value="1-1024">系统端口 (1-1024)</option>
+                            <option value="1-65535">全部端口 (1-65535)</option>
+                            <option value="custom">自定义</option>
+                        </select>
+                    </div>
+
+                    <!-- 自定义端口 -->
+                    <div class="mb-3" id="custom-ports-group" style="display:none;">
+                        <label for="custom_ports" class="form-label">自定义端口</label>
+                        <input type="text" class="form-control" id="custom_ports"
+                               placeholder="例如: 80,443,8080 或 80-443">
+                        <div class="form-text">支持逗号分隔(80,443,8080)或范围(80-1024)</div>
+                    </div>
+
+                    <!-- 关联实验 -->
+                    <div class="mb-3">
+                        <label for="experiment_id" class="form-label">关联实验 (可选)</label>
+                        <select class="form-select" id="experiment_id" name="experiment_id">
+                            <option value="">-- 不关联 --</option>
+                            {% for exp in experiments %}
+                            <option value="{{ exp.id }}">
+                                {{ exp.experiment_name }} [{{ exp.dvwa_level }}]
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <!-- 提交按钮 -->
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary btn-lg" id="submit-btn">
+                            <i class="bi bi-play-fill"></i> 创建扫描任务
+                        </button>
+                        <a href="{{ url_for('scan.scan_list') }}" class="btn btn-outline-secondary">
+                            <i class="bi bi-arrow-left"></i> 返回
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('port_range').addEventListener('change', function() {
+    var customGroup = document.getElementById('custom-ports-group');
+    if (this.value === 'custom') {
+        customGroup.style.display = 'block';
+    } else {
+        customGroup.style.display = 'none';
+    }
+});
+
+document.querySelector('form').addEventListener('submit', function(e) {
+    var portRange = document.getElementById('port_range');
+    var customPorts = document.getElementById('custom_ports');
+    if (portRange.value === 'custom' && customPorts.value.trim()) {
+        portRange.value = customPorts.value.trim();
+    }
+});
+</script>
+{% endblock %}

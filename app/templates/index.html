@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+
+{% block title %}首页 - WebSecLab{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+
+    <!-- ============ 系统状态卡 (登录/未登录均展示) ============ -->
+    <style>
+      .status-dot {
+        display: inline-block;
+        width: 14px; height: 14px;
+        border-radius: 50%;
+        box-shadow: 0 0 0 4px rgba(0,0,0,.04);
+      }
+    </style>
+    <div class="card shadow-sm mb-4 border-0" id="systemStatusCard">
+        <div class="card-header bg-light d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-hdd-network"></i> 系统状态</span>
+            <small class="text-muted">组件实时连通性探测</small>
+        </div>
+        <div class="card-body">
+            <div class="row row-cols-2 row-cols-md-5 g-3 text-center" id="systemStatusList">
+                {% for s in system_status %}
+                <div class="col" data-status-key="{{ s.key }}">
+                    <div class="d-flex flex-column align-items-center">
+                        <span class="status-dot bg-{{ 'success' if s.status == 'online' else ('danger' if s.status == 'offline' else 'secondary') }}"></span>
+                        <span class="fw-semibold mt-2">{{ s.name }}</span>
+                        <small class="text-muted status-detail">{{ s.detail }}</small>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    {% if not current_user.is_authenticated %}
+    <!-- ============ 未登录: 平台欢迎 + 实时总览 ============ -->
+    <div class="text-center py-5">
+        <h1 class="display-4"><i class="bi bi-shield-lock"></i> WebSecLab</h1>
+        <p class="lead text-muted">基于 DVWA 的 Web 漏洞分析与复现平台</p>
+        <hr class="my-4">
+        <p>学习 Web 安全知识，掌握漏洞分析与防御技术</p>
+        <div class="mt-4">
+            <a href="{{ url_for('auth.register') }}" class="btn btn-primary btn-lg me-2">
+                <i class="bi bi-person-plus"></i> 立即注册
+            </a>
+            <a href="{{ url_for('auth.login') }}" class="btn btn-outline-secondary btn-lg">
+                <i class="bi bi-box-arrow-in-right"></i> 登录
+            </a>
+        </div>
+    </div>
+
+    <!-- 平台实时总览 -->
+    <div class="row g-3 mt-3 justify-content-center">
+        <div class="col-6 col-md-2">
+            <div class="card text-center border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <i class="bi bi-book display-6 text-primary"></i>
+                    <h3 class="mt-2 mb-0">{{ overview.vulnerability_count }}</h3>
+                    <small class="text-muted">漏洞知识</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-2">
+            <div class="card text-center border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <i class="bi bi-people display-6 text-info"></i>
+                    <h3 class="mt-2 mb-0">{{ overview.user_count }}</h3>
+                    <small class="text-muted">注册用户</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-2">
+            <div class="card text-center border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <i class="bi bi-radar display-6 text-warning"></i>
+                    <h3 class="mt-2 mb-0">{{ overview.scan_count }}</h3>
+                    <small class="text-muted">扫描任务</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-2">
+            <div class="card text-center border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <i class="bi bi-terminal display-6 text-success"></i>
+                    <h3 class="mt-2 mb-0">{{ overview.experiment_count }}</h3>
+                    <small class="text-muted">漏洞实验</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-2">
+            <div class="card text-center border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <i class="bi bi-robot display-6 text-danger"></i>
+                    <h3 class="mt-2 mb-0">{{ overview.ai_count }}</h3>
+                    <small class="text-muted">AI 分析</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 平台功能介绍 -->
+    <div class="row mt-5">
+        <div class="col-md-4 mb-3">
+            <div class="card h-100 text-center">
+                <div class="card-body">
+                    <i class="bi bi-book display-5 text-primary"></i>
+                    <h5 class="card-title mt-3">漏洞知识库</h5>
+                    <p class="card-text text-muted">系统学习 OWASP Top 10 等常见 Web 漏洞</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4 mb-3">
+            <div class="card h-100 text-center">
+                <div class="card-body">
+                    <i class="bi bi-terminal display-5 text-success"></i>
+                    <h5 class="card-title mt-3">漏洞实验</h5>
+                    <p class="card-text text-muted">通过 DVWA 进行漏洞复现与分析</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4 mb-3">
+            <div class="card h-100 text-center">
+                <div class="card-body">
+                    <i class="bi bi-robot display-5 text-warning"></i>
+                    <h5 class="card-title mt-3">AI 分析</h5>
+                    <p class="card-text text-muted">智能漏洞分析与修复建议</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% else %}
+    <!-- ============ 已登录: 统一工作台 (整合原「用户中心」) ============ -->
+    {% with data = user_data %}{% include '_user_workbench.html' %}{% endwith %}
+    {% endif %}
+
+</div>
+
+<!-- 系统状态卡: AJAX 懒加载, 不阻塞首页渲染 -->
+<script>
+(function () {
+  var list = document.getElementById('systemStatusList');
+  if (!list) return;
+  function dotClass(status) {
+    if (status === 'online') return 'bg-success';
+    if (status === 'offline') return 'bg-danger';
+    return 'bg-secondary';
+  }
+  function applyStatus(data) {
+    if (!Array.isArray(data)) return;
+    data.forEach(function (item) {
+      var col = list.querySelector('[data-status-key="' + item.key + '"]');
+      if (!col) return;
+      var dot = col.querySelector('.status-dot');
+      var detail = col.querySelector('.status-detail');
+      if (dot) dot.className = 'status-dot ' + dotClass(item.status);
+      if (detail) detail.textContent = item.detail;
+    });
+  }
+  fetch('{{ url_for("main.system_status_api") }}')
+    .then(function (r) { return r.json(); })
+    .then(applyStatus)
+    .catch(function () { /* 探测失败则保持占位, 不影响页面 */ });
+})();
+</script>
+{% endblock %}

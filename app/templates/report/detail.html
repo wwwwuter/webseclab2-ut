@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}报告详情 - WebSecLab{% endblock %}
+{% block content %}
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    {% if report.report_type == 'mcp_md' %}
+                        <i class="bi bi-file-earmark-markdown text-info"></i>
+                    {% elif report.report_type == 'mcp_json' %}
+                        <i class="bi bi-file-earmark-code text-warning"></i>
+                    {% else %}
+                        <i class="bi bi-file-earmark-pdf text-danger"></i>
+                    {% endif %}
+                    {{ report.title }}
+                </h5>
+                <div>
+                    <span class="badge bg-{{ report.type_badge }} me-1">{{ report.type_label }}</span>
+                    <span class="badge bg-{{ report.status_badge }}">{{ report.status_label }}</span>
+                </div>
+            </div>
+            <div class="card-body">
+                <table class="table table-borderless">
+                    <tr><th style="width:120px;">报告ID:</th><td>{{ report.id }}</td></tr>
+                    <tr><th>报告类型:</th><td><span class="badge bg-{{ report.type_badge }}">{{ report.type_label }}</span></td></tr>
+                    <tr><th>描述:</th><td>{{ report.description or '-' }}</td></tr>
+                    <tr><th>文件格式:</th><td>{{ report.file_extension|upper }}</td></tr>
+                    <tr><th>文件大小:</th><td>{{ report.file_size_kb }} KB</td></tr>
+                    <tr><th>生成时间:</th><td>{{ report.created_time.strftime('%Y-%m-%d %H:%M:%S') }}</td></tr>
+                    {% if report.experiment %}
+                    <tr><th>关联实验:</th><td>
+                        <a href="{{ url_for('exp.exp_detail', experiment_id=report.experiment.id) }}">
+                            {{ report.experiment.experiment_name }}
+                        </a>
+                    </td></tr>
+                    {% elif report.is_mcp_report %}
+                    <tr><th>来源:</th><td><i class="bi bi-robot me-1"></i>MCP AI Agent 分析</td></tr>
+                    {% elif report.report_type == 'graph_png' %}
+                    <tr><th>来源:</th><td><i class="bi bi-diagram-3 me-1"></i>知识图谱快照</td></tr>
+                    {% endif %}
+                    {% if report.error_message %}
+                    <tr><th>错误:</th><td class="text-danger">{{ report.error_message }}</td></tr>
+                    {% endif %}
+                </table>
+            </div>
+
+            {% if report.report_type == 'graph_png' and report.status == 'generated' %}
+            <div class="card-body border-top">
+                <h6 class="mb-3"><i class="bi bi-image"></i> 图谱快照预览</h6>
+                <a href="{{ url_for('report.report_download', report_id=report.id) }}" target="_blank">
+                    <img src="{{ url_for('report.report_download', report_id=report.id) }}"
+                         class="img-fluid rounded border" alt="知识图谱快照"
+                         style="max-height:600px;">
+                </a>
+            </div>
+            {% elif report.report_type == 'mcp_md' and report.status == 'generated' and preview %}
+            <div class="card-body border-top">
+                <h6 class="mb-3"><i class="bi bi-file-earmark-markdown"></i> Markdown 内容预览</h6>
+                <pre class="border rounded p-3 bg-light" style="white-space:pre-wrap;max-height:500px;overflow:auto;font-size:0.85rem;">{{ preview }}</pre>
+            </div>
+            {% elif report.report_type == 'mcp_json' and report.status == 'generated' and preview %}
+            <div class="card-body border-top">
+                <h6 class="mb-3"><i class="bi bi-file-earmark-code"></i> JSON 内容预览</h6>
+                <pre class="border rounded p-3 bg-dark text-light" style="white-space:pre-wrap;max-height:500px;overflow:auto;font-size:0.85rem;">{{ preview }}</pre>
+            </div>
+            {% endif %}
+            <div class="card-footer">
+                {% if report.status == 'generated' %}
+                <a href="{{ url_for('report.report_download', report_id=report.id) }}" class="btn btn-success">
+                    <i class="bi bi-download"></i> 下载 {{ report.file_extension|upper }}
+                </a>
+                {% endif %}
+                <form method="POST" action="{{ url_for('report.report_delete', report_id=report.id) }}" class="d-inline">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-outline-danger"
+                            onclick="return confirm('确定删除此报告？')">
+                        <i class="bi bi-trash"></i> 删除
+                    </button>
+                </form>
+                <a href="{{ url_for('report.report_list') }}" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left"></i> 返回
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

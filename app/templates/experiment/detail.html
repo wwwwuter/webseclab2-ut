@@ -1,0 +1,231 @@
+{% extends "base.html" %}
+
+{% block title %}{{ experiment.experiment_name }} - 实验详情 - WebSecLab{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{{ url_for('main.index') }}">首页</a></li>
+        {% if admin_view %}
+        <li class="breadcrumb-item"><a href="{{ url_for('exp.admin_exp_list') }}">实验管理</a></li>
+        {% else %}
+        <li class="breadcrumb-item"><a href="{{ url_for('exp.exp_list') }}">我的实验</a></li>
+        {% endif %}
+        <li class="breadcrumb-item active">{{ experiment.experiment_name }}</li>
+    </ol>
+</nav>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-flask"></i> {{ experiment.experiment_name }}</h2>
+    <span class="badge bg-{{ experiment.status_badge }} fs-6">{{ experiment.status_label }}</span>
+</div>
+
+<div class="row">
+    <!-- 实验信息面板 -->
+    <div class="col-md-8">
+        <div class="card shadow-sm mb-3">
+            <div class="card-header bg-dark text-white">
+                <i class="bi bi-info-circle"></i> 实验信息
+            </div>
+            <ul class="list-group list-group-flush">
+                <li class="list-group-item">
+                    <strong>实验Token：</strong>
+                    <span class="d-inline-flex align-items-center gap-2">
+                        <code id="exp-token">{{ experiment.token }}</code>
+                        <button type="button" class="btn btn-sm btn-outline-secondary token-copy-btn"
+                                data-token="{{ experiment.token }}" onclick="copyToken(this)"
+                                title="复制 Token">
+                            <i class="bi bi-clipboard"></i>
+                        </button>
+                    </span>
+                </li>
+                <li class="list-group-item">
+                    <strong>关联漏洞：</strong>
+                    {% if experiment.vulnerability %}
+                    <a href="{{ url_for('vuln.vuln_detail', vuln_id=experiment.vulnerability.id) }}">
+                        {{ experiment.vulnerability.name }}
+                    </a>
+                    {% if experiment.vulnerability.cve %}
+                    <span class="badge bg-dark">{{ experiment.vulnerability.cve }}</span>
+                    {% endif %}
+                    {% else %}
+                    <span class="text-muted">未关联</span>
+                    {% endif %}
+                </li>
+                <li class="list-group-item">
+                    <strong>DVWA等级：</strong>
+                    <span class="badge bg-secondary">{{ experiment.dvwa_level }}</span>
+                </li>
+                <li class="list-group-item">
+                    <strong>目标地址：</strong>
+                    {{ experiment.target or '未设置' }}
+                </li>
+                {% if dvwa_url %}
+                <li class="list-group-item">
+                    <strong>DVWA访问链接：</strong>
+                    <a href="{{ dvwa_url }}" target="_blank" class="text-break">{{ dvwa_url }}</a>
+                </li>
+                {% endif %}
+                <li class="list-group-item">
+                    <strong>创建时间：</strong>{{ experiment.created_time.strftime('%Y-%m-%d %H:%M:%S') }}
+                </li>
+                {% if experiment.completed_time %}
+                <li class="list-group-item">
+                    <strong>完成时间：</strong>{{ experiment.completed_time.strftime('%Y-%m-%d %H:%M:%S') }}
+                </li>
+                <li class="list-group-item">
+                    <strong>实验耗时：</strong>
+                    <span class="badge bg-info text-dark">{{ duration_text or '—' }}</span>
+                </li>
+                {% endif %}
+            </ul>
+        </div>
+
+        <!-- 实验结果 -->
+        {% if experiment.result %}
+        <div class="card shadow-sm mb-3">
+            <div class="card-header bg-success text-white">
+                <i class="bi bi-check-circle"></i> 实验结果
+            </div>
+            <div class="card-body">
+                <div class="vuln-text">{{ experiment.result | light_format }}</div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- 关联 AI 报告 -->
+        {% if reports %}
+        <div class="card shadow-sm mb-3">
+            <div class="card-header bg-primary text-white">
+                <i class="bi bi-file-earmark-pdf"></i> 关联 AI 报告
+                <span class="badge bg-light text-dark">{{ reports | length }}</span>
+            </div>
+            <ul class="list-group list-group-flush">
+                {% for rep in reports %}
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <div>
+                        <a href="{{ url_for('report.report_detail', report_id=rep.id) }}" class="text-decoration-none">
+                            {{ rep.title }}
+                        </a>
+                        <div class="small text-muted">
+                            {{ rep.type_label }} · {{ rep.created_time.strftime('%Y-%m-%d %H:%M') }}
+                            {% if rep.file_size_kb %} · {{ rep.file_size_kb }} KB{% endif %}
+                        </div>
+                    </div>
+                    <span class="badge bg-{{ rep.status_badge }}">{{ rep.status_label }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        <!-- 操作按钮 (管理员只读视图隐藏写操作, 避免点到用户端路由被 403) -->
+        {% if not admin_view %}
+        <div class="d-flex gap-2 mb-3 flex-wrap">
+            {% if experiment.status == 'created' %}
+            <form method="POST" action="{{ url_for('exp.exp_start', experiment_id=experiment.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-play-fill"></i> 启动实验
+                </button>
+            </form>
+            {% endif %}
+
+            {% if experiment.status in ['created', 'running'] %}
+            <a href="{{ url_for('exp.exp_complete', experiment_id=experiment.id) }}" class="btn btn-success">
+                <i class="bi bi-check-lg"></i> 提交结果
+            </a>
+            {% endif %}
+
+            <form method="POST" action="{{ url_for('exp.exp_delete', experiment_id=experiment.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-outline-danger"
+                        onclick="return confirm('确定要删除此实验吗？此操作不可恢复！');">
+                    <i class="bi bi-trash"></i> 删除
+                </button>
+            </form>
+
+            <a href="{{ url_for('ai.ai_analyze_experiment', experiment_id=experiment.id) }}" class="btn btn-outline-success">
+                <i class="bi bi-robot"></i> AI分析
+            </a>
+
+            <form method="POST" action="{{ url_for('report.report_create', experiment_id=experiment.id) }}" class="d-inline">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-outline-warning">
+                    <i class="bi bi-file-earmark-pdf"></i> 生成报告
+                </button>
+            </form>
+
+            <a href="{{ back_url }}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> 返回列表
+            </a>
+        </div>
+        {% else %}
+        <div class="d-flex gap-2 mb-3 flex-wrap">
+            <a href="{{ url_for('exp.admin_exp_list') }}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> 返回管理列表
+            </a>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- 侧边栏: 实验日志 -->
+    <div class="col-md-4">
+        <div class="card shadow-sm">
+            <div class="card-header">
+                <i class="bi bi-journal-text"></i> 实验日志
+            </div>
+            <div class="card-body p-3">
+                {% if logs %}
+                <div class="exp-timeline">
+                    {% for log in logs %}
+                    <div class="tl-item">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="badge bg-primary">{{ log.action }}</span>
+                            <span class="tl-time">{{ log.time.strftime('%Y-%m-%d %H:%M') }}</span>
+                        </div>
+                        <div class="small">{{ log.description }}</div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-muted text-center py-3">暂无日志</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // 复制实验 Token 到剪贴板
+    function copyToken(btn) {
+        var token = btn.getAttribute('data-token');
+        var done = function () {
+            var icon = btn.querySelector('i');
+            var old = icon.className;
+            icon.className = 'bi bi-check-lg';
+            btn.classList.add('btn-success');
+            btn.classList.remove('btn-outline-secondary');
+            setTimeout(function () {
+                icon.className = old;
+                btn.classList.remove('btn-success');
+                btn.classList.add('btn-outline-secondary');
+            }, 1500);
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(token).then(done, function () {
+                fallbackCopy(token); done();
+            });
+        } else {
+            fallbackCopy(token); done();
+        }
+    }
+    function fallbackCopy(text) {
+        var ta = document.createElement('textarea');
+        ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        try { document.execCommand('copy'); } catch (e) {}
+        document.body.removeChild(ta);
+    }
+</script>
+{% endblock %}

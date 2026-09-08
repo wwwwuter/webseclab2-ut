@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-bs-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>{% block title %}WebSecLab{% endblock %}</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <!-- SOC 暗色主题 -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/soc.css') }}">
+    <!-- HTMX -->
+    <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.4/dist/htmx.min.js"></script>
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+<div class="soc-shell">
+
+    <!-- 左侧导航 -->
+    <aside class="soc-sidebar" id="socSidebar">
+        <a class="brand" href="{{ url_for('main.index') }}">
+            <span class="logo"><i class="bi bi-shield-lock"></i></span>
+            <span>
+                <span class="title">WebSecLab</span><br>
+                <span class="sub">SOC Console</span>
+            </span>
+        </a>
+        <nav class="soc-nav">
+            {% if current_user.is_authenticated %}
+            <a class="nav-link {% if request.blueprint == 'main' and request.endpoint != 'main.admin_panel' %}active{% endif %}" href="{{ url_for('main.index') }}">
+                <i class="bi bi-grid-1x2"></i> 安全态势
+            </a>
+            <a class="nav-link {% if request.blueprint == 'exp' %}active{% endif %}" href="{{ url_for('exp.exp_list') }}">
+                <i class="bi bi-flask"></i> 漏洞实验
+            </a>
+            <a class="nav-link {% if request.blueprint == 'vuln' %}active{% endif %}" href="{{ url_for('vuln.vuln_list') }}">
+                <i class="bi bi-book"></i> 漏洞库
+            </a>
+            <a class="nav-link {% if request.blueprint == 'scan' %}active{% endif %}" href="{{ url_for('scan.scan_list') }}">
+                <i class="bi bi-radar"></i> 资产扫描
+            </a>
+            <a class="nav-link {% if request.blueprint == 'ai' %}active{% endif %}" href="{{ url_for('ai.ai_history') }}">
+                <i class="bi bi-robot"></i> AI 分析
+            </a>
+            <a class="nav-link {% if request.blueprint == 'kg' %}active{% endif %}" href="{{ url_for('kg.graph_view') }}">
+                <i class="bi bi-diagram-3"></i> 知识图谱
+            </a>
+            <a class="nav-link {% if request.blueprint == 'report' %}active{% endif %}" href="{{ url_for('report.report_list') }}">
+                <i class="bi bi-file-earmark-pdf"></i> 报告中心
+            </a>
+            <a class="nav-link {% if request.blueprint == 'risk' %}active{% endif %}" href="{{ url_for('risk.risk_list') }}">
+                <i class="bi bi-shield-check"></i> 风险评估
+            </a>
+            <a class="nav-link {% if request.blueprint == 'profile' %}active{% endif %}" href="{{ url_for('profile.index') }}">
+                <i class="bi bi-person-circle"></i> 个人中心
+            </a>
+            {% if current_user.is_admin() %}
+            <a class="nav-link admin {% if request.endpoint == 'main.admin_panel' %}active{% endif %}" href="{{ url_for('main.admin_panel') }}">
+                <i class="bi bi-gear-fill"></i> 管理中心
+            </a>
+            {% endif %}
+            {% else %}
+            <a class="nav-link {% if request.endpoint == 'auth.login' %}active{% endif %}" href="{{ url_for('auth.login') }}">
+                <i class="bi bi-box-arrow-in-right"></i> 登录
+            </a>
+            <a class="nav-link {% if request.endpoint == 'auth.register' %}active{% endif %}" href="{{ url_for('auth.register') }}">
+                <i class="bi bi-person-plus"></i> 注册
+            </a>
+            {% endif %}
+        </nav>
+        <div class="sidebar-footer">WebSecLab · AI 安全运营中心</div>
+    </aside>
+
+    <!-- 移动端遮罩 -->
+    <div class="soc-backdrop" id="socBackdrop"></div>
+
+    <!-- 主区域 -->
+    <div class="soc-main">
+        <header class="soc-topbar">
+            <div class="d-flex align-items-center gap-2">
+                <button class="hamburger" id="socToggle" type="button" aria-label="切换菜单"><i class="bi bi-list"></i></button>
+                <span class="page-title">{% block page_title %}安全运营中心{% endblock %}</span>
+            </div>
+            <div class="topbar-user">
+                {% if current_user.is_authenticated %}
+                <i class="bi bi-person-circle"></i>
+                <span>{{ current_user.username }}</span>
+                {% if current_user.is_admin() %}
+                <span class="badge bg-danger">管理员</span>
+                {% else %}
+                <span class="badge bg-info">用户</span>
+                {% endif %}
+                <a href="{{ url_for('auth.logout') }}" class="btn btn-sm btn-outline-light ms-2" title="退出登录"><i class="bi bi-box-arrow-right"></i></a>
+                {% endif %}
+            </div>
+        </header>
+
+        <main class="soc-content">
+            {% block content %}{% endblock %}
+        </main>
+
+        <footer class="soc-footer">
+            WebSecLab &copy; 2026 — 基于 DVWA 的 Web 漏洞分析与复现平台
+        </footer>
+    </div>
+</div>
+
+<!-- Toast 通知容器 (替代原有 Flash Alert) -->
+<div class="toast-container" id="toast-container">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    {% for category, message in messages %}
+    <div class="toast toast-{{ category }} show" role="alert"
+         data-bs-delay="{% if category == 'danger' %}6000{% else %}4000{% endif %}"
+         data-bs-autohide="true">
+        <div class="toast-header">
+            <i class="bi bi-{% if category == 'success' %}check-circle text-success
+                {% elif category == 'danger' %}x-circle text-danger
+                {% elif category == 'warning' %}exclamation-triangle text-warning
+                {% else %}info-circle text-info{% endif %} me-2"></i>
+            <strong class="me-auto">
+                {% if category == 'success' %}成功
+                {% elif category == 'danger' %}错误
+                {% elif category == 'warning' %}警告
+                {% else %}提示{% endif %}
+            </strong>
+            <small class="text-muted">刚刚</small>
+            <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
+        </div>
+        <div class="toast-body">{{ message }}</div>
+    </div>
+    {% endfor %}
+    {% endif %}
+    {% endwith %}
+</div>
+
+<!-- Bootstrap 5 JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+// ==================== Toast 通知系统 ====================
+document.addEventListener('DOMContentLoaded', function() {
+    // 初始化页面加载时的 Flash Toast
+    var toastEls = document.querySelectorAll('#toast-container .toast');
+    toastEls.forEach(function(el) {
+        var toast = new bootstrap.Toast(el);
+        toast.show();
+    });
+
+    // ==================== 移动端侧栏 ====================
+    var toggle = document.getElementById('socToggle');
+    var sidebar = document.getElementById('socSidebar');
+    var backdrop = document.getElementById('socBackdrop');
+    function closeSidebar() {
+        if (sidebar) sidebar.classList.remove('show');
+        if (backdrop) backdrop.classList.remove('show');
+    }
+    if (toggle) {
+        toggle.addEventListener('click', function() {
+            sidebar.classList.toggle('show');
+            backdrop.classList.toggle('show');
+        });
+    }
+    if (backdrop) backdrop.addEventListener('click', closeSidebar);
+});
+
+// 全局 showNotification 函数: 供 HTMX 响应和 JS 调用
+window.showNotification = function(message, category) {
+    category = category || 'info';
+    var iconMap = {
+        success: 'check-circle text-success',
+        danger: 'x-circle text-danger',
+        warning: 'exclamation-triangle text-warning',
+        info: 'info-circle text-info'
+    };
+    var titleMap = {success: '成功', danger: '错误', warning: '警告', info: '提示'};
+
+    var html = '<div class="toast toast-' + category + ' show" role="alert" data-bs-delay="4000" data-bs-autohide="true">' +
+        '<div class="toast-header">' +
+        '<i class="bi bi-' + (iconMap[category] || iconMap.info) + ' me-2"></i>' +
+        '<strong class="me-auto">' + (titleMap[category] || '提示') + '</strong>' +
+        '<small class="text-muted">刚刚</small>' +
+        '<button type="button" class="btn-close" data-bs-dismiss="toast"></button>' +
+        '</div><div class="toast-body">' + message + '</div></div>';
+
+    var container = document.getElementById('toast-container');
+    container.insertAdjacentHTML('beforeend', html);
+    var toastEl = container.lastElementChild;
+    var toast = new bootstrap.Toast(toastEl);
+    toast.show();
+    toastEl.addEventListener('hidden.bs.toast', function() { toastEl.remove(); });
+};
+
+// HTMX 事件: 从响应头读取通知 (后端可通过 X-Toast-Message / X-Toast-Category 头传递)
+document.body.addEventListener('htmx:afterRequest', function(evt) {
+    var msg = evt.detail.xhr.getResponseHeader('X-Toast-Message');
+    var cat = evt.detail.xhr.getResponseHeader('X-Toast-Category') || 'info';
+    if (msg) showNotification(decodeURIComponent(msg), cat);
+});
+
+// HTMX 请求错误处理
+document.body.addEventListener('htmx:responseError', function(evt) {
+    showNotification('请求失败: HTTP ' + evt.detail.xhr.status, 'danger');
+});
+
+// ==================== CSRF 防护 ====================
+// 为所有 HTMX 请求自动附加 X-CSRFToken 头 (Flask-WTF CSRFProtect 校验)
+document.body.addEventListener('htmx:configRequest', function(evt) {
+    var token = document.querySelector('meta[name="csrf-token"]');
+    if (token) {
+        evt.detail.headers['X-CSRFToken'] = token.getAttribute('content');
+    }
+});
+</script>
+
+{% block extra_js %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,865 @@
+{# AI Agent 分析结果 — 完整仪表盘 (10 模块) #}
+{# 数据: plan.success, plan.tools_executed/planned_tools, plan.results, plan.execution_log, plan.summary #}
+
+{% if plan.success %}
+
+{# ══ 已识别参数回显 (方向1: 参数自动提取, 透明化) ══ #}
+{% if plan.parsed %}
+<div class="ai-section">
+    <div class="ai-card" style="border-radius:10px;border:1px solid #dbeafe;background:#eff6ff;">
+        <div class="ai-card-body" style="padding:.6rem .9rem;font-size:.82rem;color:#1e40af">
+            <i class="bi bi-sliders2"></i> <strong>已识别参数：</strong>
+            {% set p = plan.parsed %}
+            {% if p.targets %}<span class="ai-metric" style="background:#dbeafe">目标 <b>{{ p.targets|join(', ') }}</b></span>{% endif %}
+            {% if p.port_range %}<span class="ai-metric" style="background:#dbeafe">端口 <b>{{ p.port_range }}</b></span>{% endif %}
+            {% if p.scan_type %}<span class="ai-metric" style="background:#dbeafe">方式 <b>{{ p.scan_type|upper }}</b></span>{% endif %}
+            {% if p.experiment_id %}<span class="ai-metric" style="background:#dbeafe">实验 <b>#{{ p.experiment_id }}</b></span>{% endif %}
+            {% if p.scan_id %}<span class="ai-metric" style="background:#dbeafe">扫描 <b>#{{ p.scan_id }}</b></span>{% endif %}
+            {% if p.knowledge_keyword %}<span class="ai-metric" style="background:#dbeafe">关键词 <b>{{ p.knowledge_keyword }}</b></span>{% endif %}
+            {% if not (p.targets or p.port_range or p.scan_type or p.experiment_id or p.scan_id or p.knowledge_keyword) %}
+            <span class="text-muted">未识别到额外参数，按默认执行</span>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% set tool_names = plan.tools_executed or plan.planned_tools or [] %}
+{% set exec_log = plan.execution_log or [] %}
+{% set total_ms = plan.total_ms|default(0) %}
+{% if not total_ms and exec_log %}
+{% set total_ms = exec_log | sum(attribute='elapsed_ms') %}
+{% endif %}
+{% set r_data = plan.results.get('risk', {}).get('data', {}) if plan.results.get('risk', {}).get('success') else {} %}
+{% set k_data = plan.results.get('knowledge', {}).get('data', {}) if plan.results.get('knowledge', {}).get('success') else {} %}
+{% set s_data = plan.results.get('scanner', {}).get('data', {}) if plan.results.get('scanner', {}).get('success') else {} %}
+{% set d_data = plan.results.get('dashboard', {}).get('data', {}) if plan.results.get('dashboard', {}).get('success') else {} %}
+{% set rpt = plan.results.get('report', {}).get('data', {}) if plan.results.get('report', {}).get('success') else {} %}
+
+{# 提取漏洞列表 #}
+{% set vulns = [] %}
+{% if k_data.get('vulnerabilities') %}{% set vulns = k_data.vulnerabilities %}
+{% elif k_data.get('name') %}{% set vulns = [k_data] %}{% endif %}
+
+{# 提取端口列表 #}
+{% set ports = s_data.get('latest_completed', {}).get('ports', []) if s_data.get('latest_completed') else [] %}
+
+{# 风险等级颜色映射 #}
+{% set risk_colors = {'Critical': '#dc3545', 'High': '#e74c3c', 'Medium': '#f39c12', 'Low': '#27ae60'} %}
+{% set risk_color = risk_colors.get(r_data.get('risk_level', ''), '#6c757d') %}
+
+<style>
+/* ===== AI Agent Dashboard ===== */
+.ai-section{margin-bottom:1.25rem;opacity:0;animation:aiFadeIn .5s ease forwards}
+.ai-section:nth-child(1){animation-delay:.05s}
+.ai-section:nth-child(2){animation-delay:.1s}
+.ai-section:nth-child(3){animation-delay:.15s}
+.ai-section:nth-child(4){animation-delay:.2s}
+.ai-section:nth-child(5){animation-delay:.25s}
+.ai-section:nth-child(6){animation-delay:.3s}
+.ai-section:nth-child(7){animation-delay:.35s}
+.ai-section:nth-child(8){animation-delay:.4s}
+.ai-section:nth-child(9){animation-delay:.45s}
+.ai-section:nth-child(10){animation-delay:.5s}
+@keyframes aiFadeIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+
+.ai-card{border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.ai-card-header{padding:.7rem 1rem;font-weight:600;font-size:.88rem;display:flex;align-items:center;gap:.5rem}
+.ai-card-body{padding:1rem}
+
+/* Section 1: Overview */
+.ai-overview-header{background:linear-gradient(135deg,#1a73e8,#1557b0);color:#fff;padding:1rem 1.2rem;border-radius:12px 12px 0 0}
+.ai-overview-header h5{margin:0;font-weight:700;font-size:1rem}
+.ai-overview-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:.6rem}
+.ai-stat{text-align:center;padding:.65rem .4rem;background:#f8f9fa;border-radius:8px}
+.ai-stat-value{font-size:1.25rem;font-weight:700;color:#1a73e8;display:block}
+.ai-stat-label{font-size:.72rem;color:#6c757d;margin-top:2px}
+.ai-tool-chip{display:inline-flex;align-items:center;gap:.25rem;padding:.2rem .55rem;border-radius:6px;font-size:.73rem;font-weight:500;background:#e3f2fd;color:#1565c0;margin:2px}
+
+/* Section 2: Timeline */
+.ai-tl{position:relative;padding-left:2rem}
+.ai-tl::before{content:'';position:absolute;left:.7rem;top:.4rem;bottom:.4rem;width:2px;background:linear-gradient(to bottom,#1a73e8,#4caf50)}
+.ai-tl-step{position:relative;padding-bottom:.7rem}
+.ai-tl-step:last-child{padding-bottom:0}
+.ai-tl-dot{position:absolute;left:-2rem;top:.05rem;width:1.4rem;height:1.4rem;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.6rem;color:#fff;z-index:1}
+.ai-tl-dot.ok{background:#4caf50}
+.ai-tl-dot.fail{background:#ef5350}
+.ai-tl-title{font-weight:600;font-size:.84rem;color:#212529}
+.ai-tl-meta{font-size:.73rem;color:#6c757d;display:flex;gap:.6rem;flex-wrap:wrap;margin-top:1px}
+.ai-tl-detail{font-size:.78rem;color:#495057;margin-top:.2rem;padding:.4rem .6rem;background:#f8f9fa;border-radius:6px;border-left:3px solid #1a73e8}
+
+/* Section 3: Tool Cards */
+.ai-tool-card{border:1px solid #e2e8f0;border-radius:10px;margin-bottom:.65rem;overflow:hidden}
+.ai-tool-bar{padding:.5rem .75rem;display:flex;justify-content:space-between;align-items:center;font-size:.83rem;font-weight:600}
+.ai-tool-bar.ok{background:#f0fdf4;color:#166534;border-bottom:1px solid #bbf7d0}
+.ai-tool-bar.fail{background:#fef2f2;color:#991b1b;border-bottom:1px solid #fecaca}
+.ai-tool-body{padding:.65rem .75rem;font-size:.83rem}
+.ai-metric{display:inline-flex;align-items:center;gap:.2rem;padding:.18rem .45rem;background:#f0f4f8;border-radius:5px;font-size:.76rem;margin:2px}
+.ai-metric b{color:#1a73e8}
+
+/* Section 4: AI Analysis */
+.ai-analysis-card{border:2px solid #1a73e8;border-radius:12px;overflow:hidden;box-shadow:0 4px 16px rgba(26,115,232,.12)}
+.ai-analysis-header{background:linear-gradient(135deg,#e8f0fe,#d2e3fc);padding:.7rem 1rem;font-weight:700;font-size:.92rem;color:#1a73e8;display:flex;align-items:center;gap:.5rem}
+.ai-analysis-body{padding:1rem 1.2rem;line-height:1.75;font-size:.88rem;color:#1f2937}
+.ai-analysis-body p{margin-bottom:.6rem}
+.ai-highlight{background:linear-gradient(120deg,#fef3c7,#fde68a);padding:.12rem .4rem;border-radius:4px;font-weight:600}
+.ai-risk-inline{display:inline-block;padding:.12rem .45rem;border-radius:4px;font-weight:700;font-size:.8rem;color:#fff}
+
+/* Section 5: Risk Score */
+.ai-risk-card{border-radius:12px;overflow:hidden;border:1px solid #e2e8f0}
+.ai-risk-header{padding:.7rem 1rem;font-weight:600;font-size:.88rem;background:#f8f9fa;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;gap:.5rem}
+.ai-risk-body{padding:1.2rem;display:flex;align-items:center;gap:1.8rem;flex-wrap:wrap}
+.ai-risk-ring{position:relative;width:120px;height:120px;flex-shrink:0}
+.ai-risk-ring svg{transform:rotate(-90deg)}
+.ai-risk-ring .score-text{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center}
+.ai-risk-ring .score-num{font-size:1.6rem;font-weight:800;display:block;line-height:1}
+.ai-risk-ring .score-max{font-size:.68rem;color:#6c757d}
+.ai-risk-factors{flex:1;min-width:180px}
+.ai-rf-item{margin-bottom:.5rem}
+.ai-rf-label{display:flex;justify-content:space-between;font-size:.78rem;margin-bottom:2px}
+.ai-rf-bar{height:6px;background:#e5e7eb;border-radius:3px;overflow:hidden}
+.ai-rf-fill{height:100%;border-radius:3px;transition:width .8s ease}
+.ai-risk-badges{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.5rem}
+
+/* Section 6: Vuln Accordion */
+.ai-vuln-acc .accordion-item{border:1px solid #e2e8f0;border-radius:8px!important;margin-bottom:.4rem;overflow:hidden}
+.ai-vuln-acc .accordion-button{font-weight:600;font-size:.85rem;padding:.6rem .85rem;background:#fff}
+.ai-vuln-acc .accordion-button:not(.collapsed){background:#f0f4ff;box-shadow:none}
+.ai-vuln-acc .accordion-body{font-size:.84rem;padding:.75rem .85rem}
+.ai-vuln-field{margin-bottom:.55rem}
+.ai-vuln-field-label{font-weight:600;font-size:.76rem;color:#6c757d;text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px}
+.ai-vuln-ref{display:inline-block;padding:.12rem .4rem;background:#f0f4f8;border-radius:4px;font-size:.73rem;font-family:'Courier New',monospace;margin:2px}
+
+/* Section 7: Fix Code */
+.ai-fix-tabs .nav-link{font-size:.78rem;padding:.3rem .65rem;color:#6c757d;border:none}
+.ai-fix-tabs .nav-link.active{color:#1a73e8;font-weight:600;background:transparent;border-bottom:2px solid #1a73e8}
+.ai-fix-code{background:#1e293b;border-radius:8px;overflow:hidden;margin-top:.5rem}
+.ai-fix-code pre{margin:0;padding:.85rem;font-size:.78rem;color:#e2e8f0;overflow-x:auto;line-height:1.5}
+
+/* Section 8: Attack Path */
+.ai-path-svg{width:100%;overflow-x:auto;padding:.5rem 0}
+.ai-path-svg svg text{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
+
+/* Section 9: XAI */
+.ai-xai{border:1px solid #e2e8f0;border-radius:12px;padding:1rem 1.2rem;background:#fafbfc}
+.ai-xai-title{font-weight:700;font-size:.92rem;color:#1f2937;margin-bottom:.8rem;display:flex;align-items:center;gap:.5rem}
+.ai-xai-factor{display:flex;align-items:center;gap:.65rem;padding:.55rem 0;border-bottom:1px solid #f0f0f0}
+.ai-xai-factor:last-of-type{border-bottom:none}
+.ai-xai-icon{width:2rem;height:2rem;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:.78rem}
+.ai-xai-plus{color:#adb5bd;font-size:.7rem;text-align:center;padding:.1rem 0}
+.ai-xai-total{margin-top:.75rem;padding:.65rem .85rem;background:linear-gradient(135deg,#1e293b,#334155);border-radius:8px;color:#fff;display:flex;justify-content:space-between;align-items:center;font-size:.88rem;font-weight:600}
+
+/* Section 10: Download */
+.ai-dl{display:flex;gap:.45rem;flex-wrap:wrap}
+.ai-dl-btn{display:inline-flex;align-items:center;gap:.35rem;padding:.45rem .85rem;border-radius:8px;font-size:.82rem;font-weight:500;border:1px solid #d1d5db;color:#374151;background:#fff;cursor:pointer;text-decoration:none;transition:all .2s}
+.ai-dl-btn:hover{background:#f3f4f6;border-color:#9ca3af;color:#1f2937}
+.ai-dl-btn.primary{background:#1a73e8;color:#fff;border-color:#1a73e8}
+.ai-dl-btn.primary:hover{background:#1557b0}
+
+/* Severity badges */
+.sev{display:inline-block;padding:.1rem .5rem;border-radius:4px;font-size:.72rem;font-weight:700;color:#fff;vertical-align:middle}
+.sev-critical{background:#dc3545}
+.sev-high{background:#e74c3c}
+.sev-medium{background:#f39c12}
+.sev-low{background:#27ae60}
+.sev-info{background:#6c757d}
+
+/* Stars */
+.ai-stars{color:#f59e0b;font-size:.9rem;letter-spacing:1px}
+
+/* Responsive */
+@media(max-width:576px){.ai-risk-body{flex-direction:column;align-items:flex-start}.ai-overview-stats{grid-template-columns:repeat(2,1fr)}}
+</style>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<!-- Section 1: 任务概览 (Summary)                          -->
+<!-- ══════════════════════════════════════════════════════ -->
+<div class="ai-section">
+    <div class="ai-overview-header">
+        <div class="d-flex justify-content-between align-items-start">
+            <div>
+                <h5><i class="bi bi-robot"></i> AI 安全分析完成</h5>
+                {% if plan.query %}
+                <div class="small opacity-75 mt-1"><i class="bi bi-chat-quote"></i> {{ plan.query }}</div>
+                {% endif %}
+            </div>
+            <div class="text-end">
+                <span class="badge bg-success bg-opacity-75" style="font-size:.78rem;">
+                    <i class="bi bi-check-circle"></i> 完成
+                </span>
+                {% if total_ms %}
+                <div class="small opacity-75 mt-1"><i class="bi bi-clock"></i> {{ '%.2f'|format(total_ms / 1000) }}s</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <div class="ai-card" style="border-radius:0 0 12px 12px;border-top:none;">
+        <div class="ai-card-body">
+            <div class="ai-overview-stats">
+                <div class="ai-stat">
+                    <span class="ai-stat-value">{{ tool_names|length }}</span>
+                    <div class="ai-stat-label">调用工具</div>
+                </div>
+                <div class="ai-stat">
+                    <span class="ai-stat-value">{{ exec_log|selectattr('success')|list|length }}/{{ exec_log|length if exec_log else tool_names|length }}</span>
+                    <div class="ai-stat-label">成功/总计</div>
+                </div>
+                {% if r_data %}
+                <div class="ai-stat">
+                    <span class="ai-stat-value" style="color:{{ risk_color }}">{{ r_data.get('final_score', 0)|round(1) }}</span>
+                    <div class="ai-stat-label">风险评分</div>
+                </div>
+                {% endif %}
+                {% if vulns %}
+                <div class="ai-stat">
+                    <span class="ai-stat-value" style="color:#e74c3c">{{ vulns|length }}</span>
+                    <div class="ai-stat-label">发现漏洞</div>
+                </div>
+                {% endif %}
+                {% if ports %}
+                <div class="ai-stat">
+                    <span class="ai-stat-value" style="color:#8b5cf6">{{ ports|length }}</span>
+                    <div class="ai-stat-label">开放端口</div>
+                </div>
+                {% endif %}
+            </div>
+            <div class="mt-2">
+                {% set t_icons = {'scanner':'bi-wifi','nmap':'bi-radar','knowledge':'bi-book','risk':'bi-shield-exclamation','dashboard':'bi-speedometer2','report':'bi-file-earmark-text'} %}
+                {% for t in tool_names %}
+                <span class="ai-tool-chip"><i class="bi {{ t_icons.get(t,'bi-gear') }}"></i> {{ t|capitalize }}
+                    {% if t == 'scanner' and s_data.get('scan_type') and s_data.scan_type != 'socket' %}
+                    <span class="badge ms-1" style="background:#4338ca;font-size:.65rem">{{ s_data.scan_type|upper }}</span>
+                    {% endif %}
+                </span>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<!-- Section 2: AI 分析过程 (Reasoning Timeline)            -->
+<!-- ══════════════════════════════════════════════════════ -->
+{% if exec_log %}
+<div class="ai-section">
+    <div class="ai-card">
+        <div class="ai-card-header" style="background:#f8f9fa;border-bottom:1px solid #e2e8f0;">
+            <i class="bi bi-lightning-charge" style="color:#f59e0b"></i> AI 分析过程
+        </div>
+        <div class="ai-card-body">
+            <div class="ai-tl">
+                {% set step_descs = {
+                    'dashboard': '获取平台安全态势数据',
+                    'scanner': '扫描目标主机开放端口',
+                    'nmap': 'Nmap 深度服务识别',
+                    'knowledge': '查询漏洞知识库关联威胁',
+                    'risk': '执行多因素风险评估',
+                    'report': '生成安全分析报告摘要'
+                } %}
+                {% for entry in exec_log %}
+                <div class="ai-tl-step">
+                    <div class="ai-tl-dot {{ 'ok' if entry.success else 'fail' }}">
+                        <i class="bi bi-{{ 'check' if entry.success else 'x' }}"></i>
+                    </div>
+                    <div class="ai-tl-title">{{ entry.tool|capitalize }}</div>
+                    <div class="ai-tl-meta">
+                        <span><i class="bi bi-clock"></i> {{ entry.elapsed_ms }}ms</span>
+                        <span>{{ step_descs.get(entry.tool, entry.tool) }}</span>
+                        {% if entry.tool == 'scanner' %}
+                            {% set sdata = plan.results.get('scanner', {}).get('data', {}) if plan.results.get('scanner', {}).get('success') else {} %}
+                            {% if sdata.get('scan_type') and sdata.scan_type != 'socket' %}
+                            <span class="ai-metric" style="background:#e0e7ff;color:#4338ca;font-size:.7rem;padding:.1rem .35rem"><b>{{ sdata.scan_type|upper }}</b></span>
+                            {% endif %}
+                        {% endif %}
+                    </div>
+                    {% if entry.success and entry.summary %}
+                    <div class="ai-tl-detail">{{ entry.summary[:120] }}{% if entry.summary|length > 120 %}...{% endif %}</div>
+                    {% elif not entry.success %}
+                    <div class="ai-tl-detail" style="border-left-color:#ef5350;color:#b91c1c">{{ entry.get('error','执行失败') }}</div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- ══════════════════════════════════════════════════════ -->
+<!-- Section 3: 工具调用记录 (Tool Timeline)                 -->
+<!-- ══════════════════════════════════════════════════════ -->
+<div class="ai-section">
+    <div class="ai-card">
+        <div class="ai-card-header" style="background:#f8f9fa;border-bottom:1px solid #e2e8f0;">
+            <i class="bi bi-cpu" style="color:#8b5cf6"></i> 工具调用记录
+        </div>
+        <div class="ai-card-body" style="padding:.65rem .85rem">
+            {% for tname in tool_names %}
+            {% set tr = plan.results.get(tname, {}) %}
+            {% set td = tr.get('data', {}) if tr.get('success') else {} %}
+            {% set elapsed = 0 %}
+            {% for e in exec_log %}{% if e.tool == tname %}{% set elapsed = e.elapsed_ms %}{% endif %}{% endfor %}
+            <div class="ai-tool-card">
+                <div class="ai-tool-bar {{ 'ok' if tr.get('success') else 'fail' }}">
+                    <span>
+                        <i class="bi bi-{{ 'check-circle-fill' if tr.get('success') else 'x-circle-fill' }}"></i>
+                        {{ tname|capitalize }}
+                    </span>
+                    <span style="font-weight:400;font-size:.76rem;opacity:.7">{{ elapsed }}ms</span>
+                </div>
+                <div class="ai-tool-body">
+                    {% if not tr.get('success') %}
+                        <span class="text-danger small">{{ tr.get('error','执行失败') }}</span>
+                    {% elif tname == 'dashboard' %}
+                        <span class="ai-metric">实验 <b>{{ td.get('experiments',0) }}</b></span>
+                        <span class="ai-metric">扫描 <b>{{ td.get('scans',0) }}</b></span>
+                        <span class="ai-metric">AI分析 <b>{{ td.get('ai_analyses',0) }}</b></span>
+                        <span class="ai-metric">报告 <b>{{ td.get('reports',0) }}</b></span>
+                    {% elif tname == 'scanner' %}
+                        <span class="ai-metric">目标 <b>{{ td.get('target','—') }}</b></span>
+                        {% if td.get('scan_type') and td.scan_type != 'socket' %}
+                        <span class="ai-metric" style="background:#e0e7ff;color:#4338ca">方式 <b>{{ td.scan_type|upper }}</b></span>
+                        {% endif %}
+                        <span class="ai-metric">任务 <b>#{{ td.get('task_id','—') }}</b></span>
+                        {% if td.get('scanned_count') and td.scanned_count > 1 %}
+                        <span class="ai-metric" style="background:#e0e7ff">多目标 <b>{{ td.scanned_count }}</b></span>
+                        {% endif %}
+                        {% if td.get('latest_completed') %}
+                            {% for p in td.latest_completed.get('ports',[])[:8] %}
+                            <span class="ai-metric" style="background:#fef3c7"><b>{{ p.port }}</b>/{{ p.get('service','') }}</span>
+                            {% endfor %}
+                        {% else %}
+                            <span class="ai-metric" style="background:#fef3c7"><i class="bi bi-hourglass-split"></i> 异步执行中</span>
+                        {% endif %}
+                    {% elif tname == 'nmap' %}
+                        <span class="ai-metric">目标 <b>{{ td.get('target','—') }}</b></span>
+                        <span class="ai-metric">任务 <b>#{{ td.get('task_id','—') }}</b></span>
+                        <span class="ai-metric" style="background:#fef3c7"><i class="bi bi-hourglass-split"></i> 异步执行中</span>
+                    {% elif tname == 'knowledge' %}
+                        {% if td.get('vulnerabilities') %}
+                            {% for v in td.vulnerabilities[:5] %}
+                            <div class="d-flex align-items-center gap-2 mb-1">
+                                <span class="sev sev-{{ v.get('severity','info')|lower }}">{{ v.get('severity','?') }}</span>
+                                <strong style="font-size:.83rem">{{ v.name }}</strong>
+                                {% if v.get('cve') %}<span class="ai-vuln-ref">{{ v.cve }}</span>{% endif %}
+                                {% if v.get('category') %}<span class="ai-metric" style="font-size:.7rem">{{ v.category }}</span>{% endif %}
+                            </div>
+                            {% endfor %}
+                            {% if td.vulnerabilities|length > 5 %}
+                            <div class="text-muted small">... 还有 {{ td.vulnerabilities|length - 5 }} 条</div>
+                            {% endif %}
+                        {% elif td.get('name') %}
+                            <span class="sev sev-{{ td.get('severity','info')|lower }}">{{ td.get('severity','?') }}</span>
+                            <strong>{{ td.name }}</strong>
+                            {% if td.get('cve') %}<span class="ai-vuln-ref">{{ td.cve }}</span>{% endif %}
+                        {% elif td.get('statistics') %}
+                            <span class="ai-metric">总记录 <b>{{ td.statistics.get('total',0) }}</b></span>
+                        {% else %}
+                            <span class="text-muted small">{{ tr.get('summary','') }}</span>
+                        {% endif %}
+                    {% elif tname == 'risk' %}
+                        <span class="ai-metric" style="background:{{ risk_color }}15;color:{{ risk_color }}"><b>{{ td.get('final_score',0)|round(1) }}</b> {{ td.get('risk_label','') }}</span>
+                        <span class="ai-metric">CVSS <b>{{ td.get('cvss',0)|round(1) }}</b></span>
+                        <span class="ai-metric">资产 <b>{{ td.get('asset',0)|round(1) }}</b></span>
+                        <span class="ai-metric">利用 <b>{{ td.get('exploit',0)|round(1) }}</b></span>
+                        <span class="ai-metric">暴露 <b>{{ td.get('exposure',0)|round(1) }}</b></span>
+                        <span class="ai-metric">AI <b>{{ td.get('ai_confidence',0)|round(1) }}</b></span>
+                    {% elif tname == 'report' %}
+                        {% for sec in td.get('sections',[]) %}
+                        <span class="ai-metric"><i class="bi bi-file-text"></i> {{ sec.title }}</span>
+                        {% endfor %}
+                        {% if not td.get('sections') %}
+                        <span class="text-muted small">{{ tr.get('summary','') }}</span>
+                        {% endif %}
+                    {% else %}
+                        <span class="text-muted small">{{ tr.get('summary','') }}</span>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<!-- Section 4: AI 综合分析 (重点)                           -->
+<!-- ══════════════════════════════════════════════════════ -->
+<div class="ai-section">
+    <div class="ai-analysis-card">
+        <div class="ai-analysis-header">
+            <i class="bi bi-stars"></i> AI 综合分析
+        </div>
+        <div class="ai-analysis-body">
+            {% if ports %}
+            <p>目标主机开放 <span class="ai-highlight">{{ ports|length }} 个端口</span>：
+                {% for p in ports %}{{ p.port }}{% if not loop.last %}、{% endif %}{% endfor %}。
+                {% for p in ports if p.get('service') %}
+                {% if loop.first %}{% endif %}
+                {{ p.port }} 端口运行 {{ p.service }}{% if p.get('version') %} ({{ p.version }}){% endif %}{% if not loop.last %}，{% else %}。{% endif %}
+                {% endfor %}
+            </p>
+            {% elif s_data.get('target') %}
+            <p>扫描任务已派发：目标 <span class="ai-highlight">{{ s_data.target }}</span>，任务编号 #{{ s_data.get('task_id','—') }}，结果异步返回。</p>
+            {% endif %}
+
+            {% if vulns %}
+            <p>根据漏洞知识库分析，发现
+                {% if vulns|length == 1 %}
+                <span class="ai-highlight">{{ vulns[0].name }}</span> 漏洞
+                {% else %}
+                <span class="ai-highlight">{{ vulns|length }} 个漏洞</span>
+                {% endif %}。
+                {% for v in vulns[:3] %}
+                {% if v.get('severity') in ['Critical','High'] %}
+                风险等级为 <span class="ai-risk-inline" style="background:{{ risk_colors.get(v.severity,'#6c757d') }}">{{ v.severity }}</span>，
+                {% endif %}
+                {% endfor %}
+                攻击者可能利用这些漏洞获取敏感数据或系统控制权。
+            </p>
+            {% endif %}
+
+            {% if r_data %}
+            <p>多因素风险评估综合 CVSS、资产价值、利用难度、暴露面和 AI 置信度五个维度，
+                最终评分 <span class="ai-highlight">{{ r_data.get('final_score',0)|round(1) }} / 100</span>，
+                风险等级 <span class="ai-risk-inline" style="background:{{ risk_color }}">{{ r_data.get('risk_label','未知') }}</span>。
+                {% if r_data.get('final_score',0) >= 70 %}
+                建议立即采取修复措施。
+                {% elif r_data.get('final_score',0) >= 40 %}
+                建议尽快安排修复计划。
+                {% else %}
+                当前风险可控，建议持续关注。
+                {% endif %}
+            </p>
+            {% endif %}
+
+            {% if d_data and not ports and not vulns and not r_data %}
+            <p>当前平台安全态势：共 <span class="ai-highlight">{{ d_data.get('experiments',0) }} 个实验</span>、
+                {{ d_data.get('scans',0) }} 次扫描、{{ d_data.get('ai_analyses',0) }} 次 AI 分析、
+                {{ d_data.get('reports',0) }} 份报告。
+                {% if d_data.get('experiments',0) > 0 %}平台运行正常，数据持续积累中。{% endif %}
+            </p>
+            {% endif %}
+
+            {% if rpt.get('sections') %}
+            <p><strong>报告摘要：</strong>
+                {% for sec in rpt.sections %}{{ sec.title }}{% if not loop.last %}、{% else %}。{% endif %}{% endfor %}
+            </p>
+            {% endif %}
+
+            {% if not ports and not vulns and not r_data and not d_data and not rpt %}
+            <p class="text-muted">本次分析未获取足够数据，请确保填写扫描目标或实验 ID 以获得完整分析。</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<!-- Section 5: 风险评分 (Risk Score)                       -->
+<!-- ══════════════════════════════════════════════════════ -->
+{% if r_data %}
+<div class="ai-section">
+    <div class="ai-risk-card">
+        <div class="ai-risk-header">
+            <i class="bi bi-shield-fill-exclamation" style="color:{{ risk_color }}"></i> 风险评分
+        </div>
+        <div class="ai-risk-body">
+            <!-- 圆环评分 -->
+            {% set score = r_data.get('final_score',0) %}
+            {% set circ = 2 * 3.14159 * 52 %}
+            {% set offset = circ - (score / 100) * circ %}
+            <div class="ai-risk-ring">
+                <svg viewBox="0 0 120 120" width="120" height="120">
+                    <circle cx="60" cy="60" r="52" fill="none" stroke="#e5e7eb" stroke-width="10"/>
+                    <circle cx="60" cy="60" r="52" fill="none" stroke="{{ risk_color }}" stroke-width="10"
+                            stroke-linecap="round" stroke-dasharray="{{ circ }}" stroke-dashoffset="{{ offset }}"
+                            class="ai-ring-anim"/>
+                </svg>
+                <div class="score-text">
+                    <span class="score-num" style="color:{{ risk_color }}">{{ score|round(1) }}</span>
+                    <span class="score-max">/100</span>
+                </div>
+            </div>
+            <!-- 评分因子 -->
+            <div class="ai-risk-factors">
+                {% set factors = [
+                    ('CVSS', r_data.get('cvss',0), '#ef4444'),
+                    ('资产价值', r_data.get('asset',0), '#f59e0b'),
+                    ('利用难度', r_data.get('exploit',0), '#8b5cf6'),
+                    ('暴露面', r_data.get('exposure',0), '#06b6d4'),
+                    ('AI 置信度', r_data.get('ai_confidence',0), '#10b981')
+                ] %}
+                {% for label, val, color in factors %}
+                <div class="ai-rf-item">
+                    <div class="ai-rf-label">
+                        <span>{{ label }}</span>
+                        <span style="font-weight:600;color:{{ color }}">{{ val|round(1) }}</span>
+                    </div>
+                    <div class="ai-rf-bar">
+                        <div class="ai-rf-fill" style="width:{{ (val/10*100)|round }}%;background:{{ color }}"></div>
+                    </div>
+                </div>
+                {% endfor %}
+                <div class="ai-risk-badges mt-2">
+                    <span class="sev sev-{{ r_data.get('risk_level','info')|lower }}">{{ r_data.get('risk_label','') }}</span>
+                    <span class="badge bg-light text-dark border" style="font-size:.72rem">CVSS {{ r_data.get('cvss',0)|round(1) }}</span>
+                    {% if vulns %}
+                    {% for s in ['Critical','High','Medium','Low'] %}
+                    {% set cnt = vulns|selectattr('severity','equalto',s)|list|length %}
+                    {% if cnt > 0 %}
+                    <span class="sev sev-{{ s|lower }}">{{ s }}: {{ cnt }}</span>
+                    {% endif %}
+                    {% endfor %}
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- ══════════════════════════════════════════════════════ -->
+<!-- Section 6: 漏洞详情 (Accordion)                        -->
+<!-- ══════════════════════════════════════════════════════ -->
+{% if vulns %}
+<div class="ai-section">
+    <div class="ai-card">
+        <div class="ai-card-header" style="background:#fef2f2;border-bottom:1px solid #fecaca;color:#991b1b">
+            <i class="bi bi-bug-fill"></i> 漏洞详情
+            <span class="badge bg-danger ms-auto">{{ vulns|length }}</span>
+        </div>
+        <div class="ai-card-body" style="padding:.5rem .75rem">
+            <div class="accordion ai-vuln-acc" id="vulnAcc">
+                {% for v in vulns %}
+                <div class="accordion-item">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button collapsed" type="button"
+                                data-bs-toggle="collapse" data-bs-target="#vuln-{{ loop.index }}">
+                            <span class="sev sev-{{ v.get('severity','info')|lower }} me-2">{{ v.get('severity','?') }}</span>
+                            {{ v.name }}
+                        </button>
+                    </h2>
+                    <div id="vuln-{{ loop.index }}" class="accordion-collapse collapse" data-bs-parent="#vulnAcc">
+                        <div class="accordion-body">
+                            {% if v.get('description') %}
+                            <div class="ai-vuln-field">
+                                <div class="ai-vuln-field-label">漏洞介绍</div>
+                                <div>{{ v.description }}</div>
+                            </div>
+                            {% endif %}
+                            {% if v.get('attack_method') %}
+                            <div class="ai-vuln-field">
+                                <div class="ai-vuln-field-label">攻击方式</div>
+                                <div>{{ v.attack_method }}</div>
+                            </div>
+                            {% endif %}
+                            {% if v.get('category') %}
+                            <div class="ai-vuln-field">
+                                <div class="ai-vuln-field-label">影响范围</div>
+                                <div>{{ v.category }} 类漏洞 — 影响应用层数据安全</div>
+                            </div>
+                            {% endif %}
+                            <div class="ai-vuln-field">
+                                <div class="ai-vuln-field-label">利用条件</div>
+                                <div>
+                                    {% if v.get('severity') in ['Critical','High'] %}
+                                    利用难度较低，攻击者可远程利用此漏洞
+                                    {% else %}
+                                    需要特定条件才能利用
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% if v.get('solution') %}
+                            <div class="ai-vuln-field">
+                                <div class="ai-vuln-field-label">修复方案</div>
+                                <div>{{ v.solution }}</div>
+                            </div>
+                            {% endif %}
+                            <div class="mt-2">
+                                {% if v.get('cve') %}<span class="ai-vuln-ref"><i class="bi bi-bookmark"></i> {{ v.cve }}</span>{% endif %}
+                                {% if v.get('category') %}<span class="ai-vuln-ref"><i class="bi bi-tag"></i> OWASP {{ v.category }}</span>{% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- ══════════════════════════════════════════════════════ -->
+<!-- Section 7: AI 修复建议 (Fix Code)                      -->
+<!-- ══════════════════════════════════════════════════════ -->
+{% if vulns %}
+<div class="ai-section">
+    <div class="ai-card">
+        <div class="ai-card-header" style="background:#f0fdf4;border-bottom:1px solid #bbf7d0;color:#166534">
+            <i class="bi bi-code-slash"></i> AI 修复建议
+        </div>
+        <div class="ai-card-body">
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <span class="ai-stars">★★★★★</span>
+                <span class="small text-muted">推荐修复方案</span>
+            </div>
+            <ul class="nav nav-tabs ai-fix-tabs" role="tablist">
+                {% set fw = ['Flask (Python)','Spring Boot (Java)','Express (Node.js)','PHP','Laravel'] %}
+                {% for f in fw %}
+                <li class="nav-item">
+                    <button class="nav-link {{ 'active' if loop.first }}" data-bs-toggle="tab"
+                            data-bs-target="#fix-{{ loop.index }}" type="button">{{ f }}</button>
+                </li>
+                {% endfor %}
+            </ul>
+            <div class="tab-content">
+                <!-- Flask -->
+                <div class="tab-pane fade show active" id="fix-1">
+                    <div class="ai-fix-code"><pre><code class="language-python"># Flask — 使用参数化查询防止 SQL 注入
+from flask import request
+import sqlite3
+
+@app.route('/api/user')
+def get_user():
+    user_id = request.args.get('id')
+    conn = sqlite3.connect('app.db')
+    # ✓ 使用参数化查询 (?)
+    cursor = conn.execute(
+        "SELECT * FROM users WHERE id = ?",
+        (user_id,)
+    )
+    return jsonify(cursor.fetchone())</code></pre></div>
+                </div>
+                <!-- Spring Boot -->
+                <div class="tab-pane fade" id="fix-2">
+                    <div class="ai-fix-code"><pre><code class="language-java">// Spring Boot — 使用 JPA 参数绑定
+@GetMapping("/api/user")
+public User getUser(@RequestParam Long id) {
+    // ✓ JPA 自动参数化，防止 SQL 注入
+    return userRepository.findById(id)
+        .orElseThrow(() ->
+            new ResponseStatusException(
+                HttpStatus.NOT_FOUND));
+}</code></pre></div>
+                </div>
+                <!-- Express -->
+                <div class="tab-pane fade" id="fix-3">
+                    <div class="ai-fix-code"><pre><code class="language-javascript">// Express.js — 使用参数化查询
+const express = require('express');
+const pool = require('./db');
+
+app.get('/api/user', async (req, res) => {
+    const { id } = req.query;
+    // ✓ 使用 $1 占位符参数化
+    const result = await pool.query(
+        'SELECT * FROM users WHERE id = $1',
+        [id]
+    );
+    res.json(result.rows[0]);
+});</code></pre></div>
+                </div>
+                <!-- PHP PDO -->
+                <div class="tab-pane fade" id="fix-4">
+                    <div class="ai-fix-code"><pre><code class="language-php">// PHP — 使用 PDO 预处理语句
+&lt;?php
+$pdo = new PDO('mysql:host=localhost;dbname=app', 'user', 'pass');
+$id = $_GET['id'];
+
+// ✓ 使用 prepare + execute 参数化
+$stmt = $pdo->prepare(
+    'SELECT * FROM users WHERE id = :id'
+);
+$stmt->execute(['id' => $id]);
+$user = $stmt->fetch(PDO::FETCH_ASSOC);
+echo json_encode($user);</code></pre></div>
+                </div>
+                <!-- Laravel -->
+                <div class="tab-pane fade" id="fix-5">
+                    <div class="ai-fix-code"><pre><code class="language-php">// Laravel — Eloquent ORM 自动参数化
+public function getUser(Request $request)
+{
+    $id = $request->query('id');
+    // ✓ Eloquent 自动绑定参数，安全
+    $user = User::findOrFail($id);
+    return response()->json($user);
+}</code></pre></div>
+                </div>
+            </div>
+            <div class="small text-muted mt-2">
+                <i class="bi bi-info-circle"></i>
+                核心原则：永远不要拼接用户输入到 SQL 语句中，始终使用参数化查询或 ORM。
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- ══════════════════════════════════════════════════════ -->
+<!-- Section 8: 攻击路径 (Attack Path SVG)                  -->
+<!-- ══════════════════════════════════════════════════════ -->
+{% if ports or vulns %}
+<div class="ai-section">
+    <div class="ai-card">
+        <div class="ai-card-header" style="background:#fefce8;border-bottom:1px solid #fde68a;color:#92400e">
+            <i class="bi bi-diagram-2-fill"></i> 攻击路径分析
+        </div>
+        <div class="ai-card-body ai-path-svg">
+            {% set ns = namespace(nodes=[]) %}
+            {% set ns.nodes = ns.nodes + [{'icon':'🌐','label':'Internet','color':'#3b82f6'}] %}
+            {% if ports %}
+                {% set main_port = ports[0] %}
+                {% set ns.nodes = ns.nodes + [{'icon':'🔓','label':'Port ' ~ main_port.port|string,'color':'#f59e0b'}] %}
+                {% if main_port.get('service') %}
+                {% set ns.nodes = ns.nodes + [{'icon':'⚙️','label':main_port.service,'color':'#8b5cf6'}] %}
+                {% endif %}
+            {% endif %}
+            {% if vulns %}
+                {% set ns.nodes = ns.nodes + [{'icon':'💥','label':vulns[0].name,'color':'#ef4444'}] %}
+            {% endif %}
+            {% for p in ports[1:] if p.get('service') and ('mysql' in p.service|lower or 'sql' in p.service|lower or 'mongo' in p.service|lower or 'redis' in p.service|lower or 'postgres' in p.service|lower) %}
+                {% set ns.nodes = ns.nodes + [{'icon':'🗄️','label':p.service,'color':'#06b6d4'}] %}
+            {% endfor %}
+            {% set ns.nodes = ns.nodes + [{'icon':'📁','label':'Sensitive Data','color':'#dc2626'}] %}
+
+            {% set node_count = ns.nodes|length %}
+            {% set nw = 130 %}
+            {% set gap = 50 %}
+            {% set svg_w = node_count * nw + (node_count - 1) * gap + 40 %}
+            {% set cy = 45 %}
+            <svg viewBox="0 0 {{ svg_w }} 100" width="100%" preserveAspectRatio="xMidYMid meet" style="min-width:{{ svg_w }}px">
+                <defs>
+                    <marker id="ah" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+                        <polygon points="0 0,8 3,0 6" fill="#94a3b8"/>
+                    </marker>
+                    <filter id="ns"><feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity=".1"/></filter>
+                </defs>
+                {% for node in ns.nodes %}
+                {% set cx = 20 + loop.index0 * (nw + gap) %}
+                <!-- Arrow -->
+                {% if not loop.last %}
+                <line x1="{{ cx + nw }}" y1="{{ cy }}" x2="{{ cx + nw + gap - 10 }}" y2="{{ cy }}"
+                      stroke="#94a3b8" stroke-width="2" marker-end="url(#ah)" stroke-dasharray="4 2"/>
+                {% endif %}
+                <!-- Node -->
+                <g filter="url(#ns)">
+                    <rect x="{{ cx }}" y="{{ cy - 20 }}" width="{{ nw }}" height="40" rx="8"
+                          fill="#fff" stroke="{{ node.color }}" stroke-width="2"/>
+                    <text x="{{ cx + nw/2 }}" y="{{ cy - 3 }}" text-anchor="middle" font-size="13">{{ node.icon }}</text>
+                    <text x="{{ cx + nw/2 }}" y="{{ cy + 12 }}" text-anchor="middle" font-size="9"
+                          font-weight="600" fill="#374151">{{ node.label[:14] }}</text>
+                </g>
+                {% endfor %}
+            </svg>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- ══════════════════════════════════════════════════════ -->
+<!-- Section 9: AI 风险解释 (Explainable AI)                -->
+<!-- ══════════════════════════════════════════════════════ -->
+{% if r_data %}
+<div class="ai-section">
+    <div class="ai-xai">
+        <div class="ai-xai-title">
+            <i class="bi bi-lightbulb-fill" style="color:#f59e0b"></i>
+            为什么判定 {{ r_data.get('risk_label','') }}？
+        </div>
+        {% set xai_factors = [] %}
+        {% if vulns %}
+            {% set xai_factors = xai_factors + [{'icon':'bi-bug-fill','color':'#ef4444','bg':'#fef2f2','text':'发现 ' ~ vulns|length ~ ' 个' ~ (vulns[0].get('severity','')) ~ ' 级别漏洞: ' ~ vulns[0].name}] %}
+        {% endif %}
+        {% if ports %}
+            {% set xai_factors = xai_factors + [{'icon':'bi-wifi','color':'#f59e0b','bg':'#fefce8','text':'开放 ' ~ ports|length ~ ' 个端口，攻击面暴露'}] %}
+        {% endif %}
+        {% set db_ports = [] %}
+        {% for p in ports if p.get('service') %}
+            {% if 'mysql' in p.service|lower or 'sql' in p.service|lower or 'mongo' in p.service|lower or 'redis' in p.service|lower or 'postgres' in p.service|lower or 'mariadb' in p.service|lower %}
+                {% if db_ports.append(p.service) %}{% endif %}
+            {% endif %}
+        {% endfor %}
+        {% if db_ports %}
+            {% set xai_factors = xai_factors + [{'icon':'bi-database-fill','color':'#06b6d4','bg':'#ecfeff','text':db_ports|join(', ') ~ ' 数据库服务直接暴露，攻击者可窃取敏感数据'}] %}
+        {% endif %}
+        {% if r_data.get('cvss',0) >= 7 %}
+            {% set xai_factors = xai_factors + [{'icon':'bi-speedometer','color':'#dc2626','bg':'#fef2f2','text':'CVSS 评分 ' ~ r_data.cvss|round(1) ~ ' (高危)'}] %}
+        {% elif r_data.get('cvss',0) >= 4 %}
+            {% set xai_factors = xai_factors + [{'icon':'bi-speedometer','color':'#f59e0b','bg':'#fefce8','text':'CVSS 评分 ' ~ r_data.cvss|round(1) ~ ' (中危)'}] %}
+        {% endif %}
+        {% if r_data.get('asset',0) >= 7 %}
+            {% set xai_factors = xai_factors + [{'icon':'bi-building','color':'#8b5cf6','bg':'#f5f3ff','text':'涉及高价值资产 (评分 ' ~ r_data.asset|round(1) ~ ')'}] %}
+        {% endif %}
+        {% if r_data.get('exposure',0) >= 7 %}
+            {% set xai_factors = xai_factors + [{'icon':'bi-eye-fill','color':'#ec4899','bg':'#fdf2f8','text':'暴露面较大 (评分 ' ~ r_data.exposure|round(1) ~ ')'}] %}
+        {% endif %}
+
+        {% for f in xai_factors %}
+        {% if not loop.first %}
+        <div class="ai-xai-plus"><i class="bi bi-plus-lg"></i></div>
+        {% endif %}
+        <div class="ai-xai-factor">
+            <div class="ai-xai-icon" style="background:{{ f.bg }};color:{{ f.color }}">
+                <i class="bi {{ f.icon }}"></i>
+            </div>
+            <div style="font-size:.85rem">{{ f.text }}</div>
+        </div>
+        {% endfor %}
+
+        {% if not xai_factors %}
+        <div class="text-muted small">基于综合评分模型分析</div>
+        {% endif %}
+
+        <div class="ai-xai-total">
+            <span>综合评分</span>
+            <span style="font-size:1.15rem;color:{{ risk_color }}">{{ r_data.get('final_score',0)|round(1) }} / 100</span>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- ══════════════════════════════════════════════════════ -->
+<!-- Section 10: 报告下载 (Download)                        -->
+<!-- ══════════════════════════════════════════════════════ -->
+<div class="ai-section">
+    <div class="ai-card">
+        <div class="ai-card-header" style="background:#f8f9fa;border-bottom:1px solid #e2e8f0;">
+            <i class="bi bi-download" style="color:#6366f1"></i> 分析报告导出
+        </div>
+        <div class="ai-card-body">
+            <div class="ai-dl">
+                <button class="ai-dl-btn primary" onclick="aiExportPDF()">
+                    <i class="bi bi-file-earmark-pdf-fill"></i> PDF
+                </button>
+                <button class="ai-dl-btn" onclick="aiExportMD()">
+                    <i class="bi bi-markdown-fill"></i> Markdown
+                </button>
+                <button class="ai-dl-btn" onclick="aiExportJSON()">
+                    <i class="bi bi-code-square"></i> JSON
+                </button>
+                <button class="ai-dl-btn" onclick="aiCopySummary()">
+                    <i class="bi bi-clipboard"></i> 复制摘要
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 嵌入原始数据 (供 panel.html 中定义的全局导出函数使用) -->
+<script id="ai-plan-data" type="application/json">{{ plan | tojson }}</script>
+</script>
+
+{% else %}
+<!-- 执行失败 -->
+<div class="ai-section">
+    <div class="ai-card" style="border-color:#fecaca">
+        <div class="ai-card-header" style="background:#fef2f2;border-bottom:1px solid #fecaca;color:#991b1b">
+            <i class="bi bi-exclamation-triangle-fill"></i> 分析执行失败
+        </div>
+        <div class="ai-card-body">
+            <p class="mb-0 text-danger">{{ plan.error | default('未知错误，请检查参数后重试') }}</p>
+            {% if plan.query %}
+            <div class="small text-muted mt-2">查询: {{ plan.query }}</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endif %}

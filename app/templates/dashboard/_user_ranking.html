@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}用户维度下钻 - WebSecLab{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-people"></i> 用户维度下钻</h2>
+    <a href="{{ url_for('dashboard.security_dashboard') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left"></i> 返回 Dashboard
+    </a>
+</div>
+
+<div class="row g-3">
+    <div class="col-md-7">
+        <div class="card">
+            <div class="card-header"><h6 class="mb-0"><i class="bi bi-exclamation-octagon text-danger"></i> Top10 风险用户 (按高危评估数)</h6></div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr><th>用户</th><th>评估数</th><th>平均分</th><th>高危数</th><th></th></tr>
+                        </thead>
+                        <tbody>
+                            {% for u in ranking %}
+                            <tr>
+                                <td><i class="bi bi-person"></i> {{ u.username }}</td>
+                                <td>{{ u.assess_cnt }}</td>
+                                <td>
+                                    <span class="badge bg-{% if u.avg_score >= 70 %}danger{% elif u.avg_score >= 40 %}warning{% else %}success{% endif %}">
+                                        {{ u.avg_score }}
+                                    </span>
+                                </td>
+                                <td>
+                                    {% if u.high_cnt > 0 %}<span class="badge bg-danger">{{ u.high_cnt }}</span>{% else %}0{% endif %}
+                                </td>
+                                <td>
+                                    <a href="{{ url_for('dashboard.dashboard_user_drill', uid=u.user_id) }}" class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-arrow-right-circle"></i> 详情
+                                    </a>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr><td colspan="5" class="text-center text-muted py-3">暂无风险评估数据</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-5">
+        <div class="card">
+            <div class="card-header"><h6 class="mb-0"><i class="bi bi-fire text-warning"></i> 最危险实验 (按失败数)</h6></div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr><th>实验</th><th>总数</th><th>失败</th><th>失败率</th></tr>
+                        </thead>
+                        <tbody>
+                            {% for e in experiments %}
+                            <tr>
+                                <td>{{ e.name }}</td>
+                                <td>{{ e.total }}</td>
+                                <td>{% if e.failed_cnt > 0 %}<span class="badge bg-danger">{{ e.failed_cnt }}</span>{% else %}0{% endif %}</td>
+                                <td>
+                                    <span class="badge bg-{% if e.fail_rate >= 50 %}danger{% elif e.fail_rate >= 20 %}warning{% else %}success{% endif %}">
+                                        {{ e.fail_rate }}%
+                                    </span>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr><td colspan="4" class="text-center text-muted py-3">暂无实验数据</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

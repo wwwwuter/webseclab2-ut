@@ -1,0 +1,442 @@
+{% extends "base.html" %}
+{% block title %}安全知识图谱 - WebSecLab{% endblock %}
+
+{% block content %}
+<script src="{{ url_for('static', filename='vendor/echarts.min.js') }}"></script>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2><i class="bi bi-diagram-3"></i> 安全知识图谱</h2>
+    <div class="d-flex gap-2 align-items-center">
+        <span class="badge bg-dark" id="graphCount">
+            {{ stats.total_nodes }} 节点 / {{ stats.total_edges }} 关系
+        </span>
+        {% if current_user.is_admin() %}
+        <button class="btn btn-sm btn-outline-dark" id="rebuildBtn"
+                onclick="rebuildGraph()">
+            <i class="bi bi-arrow-clockwise"></i> 重建图谱
+        </button>
+        {% endif %}
+    </div>
+</div>
+
+<div class="row g-3 mb-3">
+    <!-- 搜索框 -->
+    <div class="col-md-4">
+        <div class="input-group input-group-sm">
+            <span class="input-group-text"><i class="bi bi-search"></i></span>
+            <input type="text" class="form-control" id="graphSearch"
+                   placeholder="搜索节点 (漏洞名/CVE/分类...)">
+            <button class="btn btn-outline-dark" onclick="searchGraph()">搜索</button>
+        </div>
+        <div id="searchResults" class="mt-1"></div>
+    </div>
+
+    <!-- 筛选工具条 -->
+    <div class="col-md-5">
+        <div class="d-flex flex-wrap gap-2 align-items-center">
+            <span class="text-muted small">类型:</span>
+            <div class="btn-group btn-group-sm" role="group" id="typeFilters">
+                <input type="checkbox" class="btn-check" id="t-cat" value="category" autocomplete="off" checked>
+                <label class="btn btn-outline-success btn-sm" for="t-cat">漏洞分类</label>
+                <input type="checkbox" class="btn-check" id="t-owasp" value="owasp" autocomplete="off" checked>
+                <label class="btn btn-outline-primary btn-sm" for="t-owasp">OWASP</label>
+                <input type="checkbox" class="btn-check" id="t-vuln" value="vulnerability" autocomplete="off" checked>
+                <label class="btn btn-outline-danger btn-sm" for="t-vuln">漏洞</label>
+                <input type="checkbox" class="btn-check" id="t-cve" value="cve" autocomplete="off" checked>
+                <label class="btn btn-outline-purple btn-sm" for="t-cve" style="border-color:#6f42c1;color:#6f42c1;">CVE</label>
+                <input type="checkbox" class="btn-check" id="t-sol" value="solution" autocomplete="off" checked>
+                <label class="btn btn-outline-warning btn-sm" for="t-sol">修复方案</label>
+                <input type="checkbox" class="btn-check" id="t-atk" value="attack" autocomplete="off" checked>
+                <label class="btn btn-outline-orange btn-sm" for="t-atk" style="border-color:#fd7e14;color:#fd7e14;">攻击方式</label>
+            </div>
+            <select class="form-select form-select-sm d-inline-block w-auto" id="severityFilter">
+                <option value="">全部严重程度</option>
+                <option value="Critical">Critical</option>
+                <option value="High">High</option>
+                <option value="Medium">Medium</option>
+                <option value="Low">Low</option>
+            </select>
+            <button class="btn btn-sm btn-outline-secondary" onclick="resetFilters()">重置</button>
+        </div>
+    </div>
+
+    <!-- 路径查询 + 导出 -->
+    <div class="col-md-3">
+        <div class="d-flex gap-1 align-items-center">
+            <input list="nodeOptions" class="form-control form-control-sm" id="pathA" placeholder="起点节点">
+            <span class="text-muted">→</span>
+            <input list="nodeOptions" class="form-control form-control-sm" id="pathB" placeholder="终点节点">
+            <button class="btn btn-sm btn-outline-info" onclick="findPath()" title="高亮两节点间路径">
+                <i class="bi bi-signpost-split"></i>
+            </button>
+            <button class="btn btn-sm btn-outline-success" onclick="exportPNG()" title="导出快照到报告">
+                <i class="bi bi-camera"></i>
+            </button>
+            <datalist id="nodeOptions"></datalist>
+        </div>
+    </div>
+</div>
+
+<!-- 图谱可视化区域 -->
+<div class="card shadow-sm mb-3">
+    <div class="card-body p-0">
+        <div id="graphChart" style="height: 550px;"></div>
+    </div>
+</div>
+
+<!-- 节点详情面板 -->
+<div class="card shadow-sm" id="nodeDetailCard" style="display: none;">
+    <div class="card-header d-flex justify-content-between">
+        <h6 class="mb-0"><i class="bi bi-info-circle"></i> 节点详情</h6>
+        <button class="btn-close" onclick="document.getElementById('nodeDetailCard').style.display='none'"></button>
+    </div>
+    <div class="card-body" id="nodeDetailContent"></div>
+</div>
+
+<!-- 图谱统计 -->
+<div class="row g-3 mt-3">
+    <div class="col-md-6">
+        <div class="card shadow-sm">
+            <div class="card-header"><h6 class="mb-0">节点类型分布</h6></div>
+            <div class="card-body"><div id="nodeTypeChart" style="height:200px;"></div></div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card shadow-sm">
+            <div class="card-header"><h6 class="mb-0">关系类型分布 (入/出向)</h6></div>
+            <div class="card-body"><div id="relTypeChart" style="height:200px;"></div></div>
+        </div>
+    </div>
+</div>
+
+<script>
+var graphChart = echarts.init(document.getElementById('graphChart'));
+var allNodeIds = {};        // id -> node 对象(含 value 坐标)
+var degreeExtent = [1, 1];  // 度数 min/max, 用于尺寸映射
+
+function baseGraphOption() {
+    return {
+        tooltip: {
+            formatter: function(params) {
+                if (params.dataType === 'node') {
+                    return '<strong>' + params.data.name + '</strong><br/>' +
+                           '类型: ' + (params.data.type || '') + '<br/>' +
+                           (params.data.severity ? '严重程度: ' + params.data.severity + '<br/>' : '') +
+                           '关联数: ' + (params.data.degree || 0) + '<br/>' +
+                           (params.data.cve ? 'CVE: ' + params.data.cve : '');
+                }
+                return params.data.relation || '';
+            }
+        },
+        legend: [{
+            data: ['漏洞分类', 'OWASP', '漏洞', 'CVE', '修复方案', '攻击方式'],
+            bottom: 10
+        }],
+        series: [{
+            type: 'graph', layout: 'force', roam: true, draggable: true,
+            force: { repulsion: 200, edgeLength: [80, 200], gravity: 0.1 },
+            data: [], links: [], categories: [],
+            label: {
+                show: true, position: 'right', fontSize: 11,
+                formatter: function(params) {
+                    var name = params.data.name;
+                    return name.length > 15 ? name.substring(0, 15) + '...' : name;
+                }
+            },
+            lineStyle: { color: 'source', curveness: 0.1, opacity: 0.4 },
+            emphasis: { focus: 'adjacency', lineStyle: { width: 3 } }
+        }]
+    };
+}
+graphChart.setOption(baseGraphOption());
+
+// ============ 度数 → 尺寸 映射 ============
+function applyDegreeSizing(nodes) {
+    var degs = nodes.map(function(n) { return n.degree || 0; });
+    var min = Math.min.apply(null, degs.length ? degs : [1]);
+    var max = Math.max.apply(null, degs.length ? degs : [1]);
+    degreeExtent = [min, max];
+    var MIN_SZ = 12, MAX_SZ = 55;
+    nodes.forEach(function(n) {
+        var d = n.degree || 0;
+        var t = (max === min) ? 0.5 : (d - min) / (max - min);
+        n.symbolSize = Math.round(MIN_SZ + t * (MAX_SZ - MIN_SZ));
+    });
+    return nodes;
+}
+
+// ============ 加载/刷新图谱数据 ============
+function loadGraph() {
+    var types = getCheckedTypes();
+    var sev = document.getElementById('severityFilter').value;
+    var url = '{{ url_for("kg.api_graph_data") }}';
+    var params = [];
+    types.forEach(function(t) { params.push('type=' + encodeURIComponent(t)); });
+    if (sev) params.push('severity=' + encodeURIComponent(sev));
+    if (params.length) url += '?' + params.join('&');
+
+    fetch(url)
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            d.nodes = applyDegreeSizing(d.nodes);
+            allNodeIds = {};
+            d.nodes.forEach(function(n) { allNodeIds[n.id] = n; });
+            // 填充路径输入候选
+            var opts = document.getElementById('nodeOptions');
+            opts.innerHTML = d.nodes.map(function(n) {
+                return '<option value="' + n.id + '">' + n.name + '</option>';
+            }).join('');
+            graphChart.setOption({
+                series: [{ data: d.nodes, links: d.links, categories: d.categories }]
+            });
+            document.getElementById('graphCount').textContent =
+                d.stats.total_nodes + ' 节点 / ' + d.stats.total_edges + ' 关系';
+            renderStatsCharts(d.stats);
+        })
+        .catch(function() { showNotification('图谱数据加载失败', 'danger'); });
+}
+
+// ============ 点击节点 ============
+graphChart.on('click', function(params) {
+    if (params.dataType === 'node' && params.data.id) {
+        showNodeDetail(params.data.id);
+    }
+});
+
+function showNodeDetail(nodeId) {
+    fetch('/knowledge-graph/api/node/' + encodeURIComponent(nodeId))
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            if (d.error) return;
+            var card = document.getElementById('nodeDetailCard');
+            var content = document.getElementById('nodeDetailContent');
+            card.style.display = 'block';
+            var html = '<div class="row"><div class="col-md-6">';
+            html += '<h6>' + d.node.label + '</h6>';
+            html += '<p class="text-muted small">' + (d.node.description || '无描述') + '</p>';
+            if (d.node.severity) html += '<span class="badge bg-danger">' + d.node.severity + '</span> ';
+            if (d.node.cve) html += '<span class="badge bg-secondary">' + d.node.cve + '</span> ';
+            html += '<span class="badge bg-info">关联数 ' + d.degree + '</span>';
+            html += '</div><div class="col-md-6">';
+            html += '<h6>关联节点 (' + d.neighbors.length + ')</h6>';
+            html += '<div class="list-group list-group-flush" style="max-height:200px;overflow-y:auto;">';
+            d.neighbors.forEach(function(n) {
+                var arrow = n.direction === 'out' ? '→' : '←';
+                html += '<a href="javascript:void(0)" class="list-group-item list-group-item-action py-1 small" ' +
+                        'onclick="focusNode(\'' + n.id + '\');showNodeDetail(\'' + n.id + '\')">' +
+                        arrow + ' <strong>' + n.relation_label + '</strong> ' + n.label + '</a>';
+            });
+            html += '</div></div></div>';
+            content.innerHTML = html;
+        })
+        .catch(function() {});
+}
+
+// ============ 搜索点击聚焦 ============
+function focusNode(nodeId) {
+    var data = graphChart.getOption().series[0].data;
+    var idx = data.findIndex(function(n) { return n.id === nodeId; });
+    if (idx >= 0) graphChart.dispatchAction({ type: 'highlight', seriesIndex: 0, dataIndex: idx });
+    var pos = allNodeIds[nodeId];
+    if (pos && pos.value && typeof graphChart.scrollTo === 'function') {
+        graphChart.scrollTo({ x: pos.value[0], y: pos.value[1] });
+    }
+}
+
+function searchGraph() {
+    var q = document.getElementById('graphSearch').value.trim();
+    if (!q) return;
+    fetch('/knowledge-graph/api/search?q=' + encodeURIComponent(q))
+        .then(function(r) { return r.json(); })
+        .then(function(results) {
+            var container = document.getElementById('searchResults');
+            if (!results.length) {
+                container.innerHTML = '<small class="text-muted">未找到匹配节点</small>';
+                return;
+            }
+            var html = '<div class="list-group" style="max-height:200px;overflow-y:auto;">';
+            results.forEach(function(r) {
+                html += '<a href="javascript:void(0)" class="list-group-item list-group-item-action py-1 small" ' +
+                        'onclick="focusNode(\'' + r.id + '\');showNodeDetail(\'' + r.id + '\')">' +
+                        '<span class="badge bg-secondary me-1">' + r.type + '</span>' + r.label + '</a>';
+            });
+            html += '</div>';
+            container.innerHTML = html;
+        })
+        .catch(function() {});
+}
+document.getElementById('graphSearch').addEventListener('keyup', function(e) {
+    if (e.key === 'Enter') searchGraph();
+});
+
+// ============ 筛选 ============
+function getCheckedTypes() {
+    var checked = [];
+    document.querySelectorAll('#typeFilters input[type=checkbox]:checked').forEach(function(c) { checked.push(c.value); });
+    return checked;
+}
+document.querySelectorAll('#typeFilters input[type=checkbox]').forEach(function(c) {
+    c.addEventListener('change', loadGraph);
+});
+document.getElementById('severityFilter').addEventListener('change', loadGraph);
+function resetFilters() {
+    document.querySelectorAll('#typeFilters input[type=checkbox]').forEach(function(c) { c.checked = true; });
+    document.getElementById('severityFilter').value = '';
+    loadGraph();
+}
+
+// ============ 图例显隐提示 ============
+graphChart.on('legendselectchanged', function(params) {
+    showNotification((params.selected[params.name] ? '显示' : '隐藏') + '分类: ' + params.name, 'info');
+});
+
+// ============ P2: 两节点路径高亮 ============
+function findPath() {
+    var a = document.getElementById('pathA').value.trim();
+    var b = document.getElementById('pathB').value.trim();
+    if (!a || !b) { showNotification('请选择起点和终点节点', 'warning'); return; }
+    if (a === b) { showNotification('起点和终点不能相同', 'warning'); return; }
+    fetch('/knowledge-graph/api/path/' + encodeURIComponent(a) + '/' + encodeURIComponent(b))
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            if (!d.found) {
+                showNotification(d.error || '未找到路径', 'warning');
+                return;
+            }
+            highlightPath(d.path, d.edges);
+        })
+        .catch(function() { showNotification('路径查询失败', 'danger'); });
+}
+
+function highlightPath(pathIds, edges) {
+    var nodeSet = {};
+    pathIds.forEach(function(id) { nodeSet[id] = true; });
+    var edgeSet = {};
+    edges.forEach(function(e) { edgeSet[e.source + '->' + e.target] = true; });
+
+    // 非路径节点/边 淡化
+    var data = graphChart.getOption().series[0].data.map(function(n) {
+        return Object.assign({}, n, {
+            itemStyle: nodeSet[n.id] ? { borderColor: '#ffc107', borderWidth: 3 } : { opacity: 0.15 },
+            label: { opacity: nodeSet[n.id] ? 1 : 0.15 }
+        });
+    });
+    var links = graphChart.getOption().series[0].links.map(function(l) {
+        var on = edgeSet[l.source + '->' + l.target] || edgeSet[l.target + '->' + l.source];
+        return Object.assign({}, l, { lineStyle: on ? { width: 4, opacity: 1, color: '#ffc107' } : { opacity: 0.05 } });
+    });
+    graphChart.setOption({ series: [{ data: data, links: links }] });
+
+    // 居中到路径中点
+    var mid = pathIds[Math.floor(pathIds.length / 2)];
+    focusNode(mid);
+    showNotification('已高亮路径: ' + pathIds.length + ' 个节点, ' + edges.length + ' 条关系', 'success');
+}
+
+function clearHighlight() {
+    loadGraph();
+}
+
+// ============ P2: 导出 PNG 快照到报告 ============
+function exportPNG() {
+    var png = graphChart.getDataURL({ type: 'png', pixelRatio: 2, backgroundColor: '#fff' });
+    fetch('{{ url_for("kg.save_snapshot") }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+        body: JSON.stringify({ image: png, title: '知识图谱快照' })
+    })
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            if (d.success) {
+                showNotification(d.message + '，可在「报告管理」查看', 'success');
+            } else {
+                showNotification(d.message || '导出失败', 'danger');
+            }
+        })
+        .catch(function() { showNotification('导出失败', 'danger'); });
+}
+
+function getCSRFToken() {
+    var el = document.querySelector('meta[name="csrf-token"]');
+    return el ? el.getAttribute('content') : '';
+}
+
+// ============ 统计图表 ============
+function renderStatsCharts(stats) {
+    var nodeTypeChart = echarts.init(document.getElementById('nodeTypeChart'));
+    var typeLabels = {vulnerability:'漏洞', category:'分类', owasp:'OWASP', cve:'CVE', solution:'修复', attack:'攻击'};
+    var nodeData = [];
+    for (var k in stats.node_types) nodeData.push({ value: stats.node_types[k], name: typeLabels[k] || k });
+    nodeTypeChart.setOption({
+        tooltip: { trigger: 'item' },
+        series: [{
+            type: 'pie', radius: '60%', data: nodeData,
+            color: ['#dc3545','#198754','#0d6efd','#6f42c1','#ffc107','#fd7e14'],
+            label: { formatter: '{b}: {c}' }
+        }]
+    });
+
+    var relTypeChart = echarts.init(document.getElementById('relTypeChart'));
+    var counts = relateDirectionCounts(stats);
+    relTypeChart.setOption({
+        tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+        legend: { data: ['出向 (源)', '入向 (目标)'], top: 0 },
+        xAxis: { type: 'category', data: counts.names, axisLabel: { interval: 0, rotate: 20 } },
+        yAxis: { type: 'value' },
+        series: [
+            { name: '出向 (源)', type: 'bar', data: counts.out, itemStyle: { color: '#0d6efd' } },
+            { name: '入向 (目标)', type: 'bar', data: counts.in, itemStyle: { color: '#dc3545' } }
+        ]
+    });
+    window.addEventListener('resize', function() { nodeTypeChart.resize(); relTypeChart.resize(); });
+}
+
+function relateDirectionCounts(stats) {
+    var relLabels = {belongs_to:'属于', classified_as:'归类', has_cve:'CVE', fixed_by:'修复', exploited_via:'利用', related_to:'同类'};
+    var names = [], out = [], inn = [];
+    for (var k in stats.relation_types) {
+        names.push(relLabels[k] || k);
+        if (k === 'fixed_by' || k === 'classified_as' || k === 'belongs_to') { inn.push(stats.relation_types[k]); out.push(0); }
+        else { out.push(stats.relation_types[k]); inn.push(0); }
+    }
+    return { names: names, out: out, in: inn };
+}
+
+// ============ 重建 ============
+function rebuildGraph() {
+    var btn = document.getElementById('rebuildBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 重建中...';
+    var types = getCheckedTypes();
+    var sev = document.getElementById('severityFilter').value;
+    var params = [];
+    types.forEach(function(t) { params.push('type=' + encodeURIComponent(t)); });
+    if (sev) params.push('severity=' + encodeURIComponent(sev));
+    var url = '{{ url_for("kg.rebuild_graph") }}' + (params.length ? '?' + params.join('&') : '');
+
+    fetch(url, { method: 'POST', headers: { 'X-CSRFToken': getCSRFToken() } })
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            if (d.success && d.data) {
+                d.data.nodes = applyDegreeSizing(d.data.nodes);
+                allNodeIds = {};
+                d.data.nodes.forEach(function(n) { allNodeIds[n.id] = n; });
+                graphChart.setOption({ series: [{ data: d.data.nodes, links: d.data.links, categories: d.data.categories }] });
+                document.getElementById('graphCount').textContent =
+                    d.data.stats.total_nodes + ' 节点 / ' + d.data.stats.total_edges + ' 关系';
+                renderStatsCharts(d.data.stats);
+                showNotification(d.message, 'success');
+            } else { showNotification('重建失败', 'danger'); }
+        })
+        .catch(function() { showNotification('重建失败', 'danger'); })
+        .finally(function() {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> 重建图谱';
+        });
+}
+
+// ============ 启动 ============
+loadGraph();
+window.addEventListener('resize', function() { graphChart.resize(); });
+</script>
+{% endblock %}

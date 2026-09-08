@@ -1,0 +1,464 @@
+{% extends "base.html" %}
+{% block title %}AI分析 - WebSecLab{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <!-- 表单区域 (提交后隐藏) -->
+        <div id="form-section">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="bi bi-robot"></i> AI智能漏洞分析</h5>
+            </div>
+            <div class="card-body">
+
+                {% if analysis_type == 'experiment' %}
+                <div class="alert alert-info">
+                    <h6><i class="bi bi-flask"></i> 实验信息</h6>
+                    <ul class="mb-0">
+                        <li>实验名称: <strong>{{ experiment.experiment_name }}</strong></li>
+                        <li>目标: <code>{{ experiment.target }}</code></li>
+                        <li>DVWA等级: {{ experiment.dvwa_level }}</li>
+                        {% if experiment.vulnerability %}
+                        <li>关联漏洞: {{ experiment.vulnerability.name }}</li>
+                        {% endif %}
+                    </ul>
+                </div>
+                <form id="analysis-form" method="POST"
+                      action="{{ url_for('ai.ai_analyze_experiment', experiment_id=experiment.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                {% elif analysis_type == 'scan' %}
+                <div class="alert alert-info">
+                    <h6><i class="bi bi-radar"></i> 扫描任务信息</h6>
+                    <ul class="mb-0">
+                        <li>目标: <code>{{ task.target }}</code></li>
+                        <li>扫描类型: {{ task.scan_type_label }}</li>
+                        <li>开放端口: {{ task.open_ports_count }} 个</li>
+                    </ul>
+                </div>
+                <form id="analysis-form" method="POST"
+                      action="{{ url_for('ai.ai_analyze_scan', scan_task_id=task.id) }}">
+
+                {% elif analysis_type == 'custom' %}
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle"></i> 输入安全相关内容，AI 将进行智能分析。可选分析场景让结果更聚焦。
+                </div>
+
+                <!-- 场景模板快捷填充 -->
+                <div class="mb-3">
+                    <label class="form-label d-block">快速场景</label>
+                    <div class="btn-group btn-group-sm flex-wrap" role="group" aria-label="分析场景">
+                        <button type="button" class="btn btn-outline-secondary scenario-btn"
+                                data-scene="general"
+                                data-fill="请分析以下安全信息：
+
+目标：
+现象：
+请评估其安全风险并给出修复建议。">通用分析</button>
+                        <button type="button" class="btn btn-outline-secondary scenario-btn"
+                                data-scene="code"
+                                data-fill="以下是一段存在安全隐患的代码，请进行代码审计：
+
+```python
+# 在此粘贴代码
+```
+
+请指出漏洞位置、原理及修复后的安全代码示例。">代码审计</button>
+                        <button type="button" class="btn btn-outline-secondary scenario-btn"
+                                data-scene="log"
+                                data-fill="以下是安全日志/流量记录片段，请分析是否存在攻击痕迹：
+
+```
+# 在此粘贴日志
+```
+
+请还原攻击时间线并说明是否需要处置。">日志分析</button>
+                        <button type="button" class="btn btn-outline-secondary scenario-btn"
+                                data-scene="config"
+                                data-fill="以下是服务/系统配置文件片段，请审查安全配置：
+
+```
+# 在此粘贴配置
+```
+
+请指出过度授权、缺失加固项，并给出修正。">配置审查</button>
+                        <button type="button" class="btn btn-outline-secondary scenario-btn"
+                                data-scene="phishing"
+                                data-fill="以下是疑似钓鱼邮件/链接样本，请研判：
+
+发件人：
+主题：
+正文/链接：
+
+请识别社工手法与可疑特征，并给出处置建议。">钓鱼研判</button>
+                    </div>
+                </div>
+
+                <form id="analysis-form" method="POST" action="{{ url_for('ai.ai_custom') }}">
+                    <div class="mb-2">
+                        <label for="input_data" class="form-label">分析内容 <span class="text-danger">*</span></label>
+                        <div class="text-end">
+                            <small class="text-muted" id="char-count">0 / 5000</small>
+                        </div>
+                        <textarea class="form-control" id="input_data" name="input_data" rows="8"
+                                  maxlength="5000"
+                                  placeholder="例如：&#10;扫描发现目标 192.168.56.101 开放了以下端口：&#10;80/tcp open Apache 2.4.57&#10;3306/tcp open MySQL 8.0&#10;请分析安全风险。" required>{{ prefill }}</textarea>
+                        <div class="mt-1">
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="clear-btn">
+                                <i class="bi bi-eraser"></i> 清空
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="example-btn">
+                                <i class="bi bi-lightbulb"></i> 示例
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 分析场景 -->
+                    <div class="mb-3">
+                        <label for="scene" class="form-label">分析场景</label>
+                        <select class="form-select" id="scene" name="scene">
+                            <option value="general">通用分析</option>
+                            <option value="code">代码审计</option>
+                            <option value="log">日志分析</option>
+                            <option value="config">配置审查</option>
+                            <option value="phishing">钓鱼研判</option>
+                        </select>
+                    </div>
+
+                    <!-- RAG 知识库增强 -->
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" class="form-check-input" id="use_rag" name="use_rag">
+                        <label class="form-check-label" for="use_rag">
+                            <i class="bi bi-database"></i> 结合安全知识库（语义检索漏洞知识增强分析）
+                        </label>
+                    </div>
+                {% endif %}
+
+                    <div class="mb-3">
+                        <label for="model" class="form-label">选择模型</label>
+                        <select class="form-select" id="model" name="model">
+                            <option value="">自动选择 (qwen2.5:7b)</option>
+                            {% for m in models %}
+                            <option value="{{ m }}">{{ m }}</option>
+                            {% endfor %}
+                        </select>
+                        {% if not models %}
+                        <div class="form-text text-warning">
+                            <i class="bi bi-exclamation-triangle"></i> 未检测到已安装模型，将尝试使用默认模型
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary btn-lg" id="submit-btn">
+                            <i class="bi bi-cpu"></i> 启动AI分析
+                        </button>
+                        {% if analysis_type == 'custom' %}
+                        <a href="{{ url_for('ai.ai_history') }}" class="btn btn-outline-secondary">
+                            <i class="bi bi-arrow-left"></i> 返回
+                        </a>
+                        {% elif analysis_type == 'experiment' %}
+                        <a href="{{ url_for('exp.exp_detail', experiment_id=experiment.id) }}" class="btn btn-outline-secondary">
+                            <i class="bi bi-arrow-left"></i> 返回实验
+                        </a>
+                        {% elif analysis_type == 'scan' %}
+                        <a href="{{ url_for('scan.scan_detail', task_id=task.id) }}" class="btn btn-outline-secondary">
+                            <i class="bi bi-arrow-left"></i> 返回扫描
+                        </a>
+                        {% endif %}
+                    </div>
+                </form>
+            </div>
+        </div>
+        </div>
+
+        <!-- 流式输出区域 (提交后显示) -->
+        <div id="stream-section" style="display:none;">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="bi bi-robot"></i> AI实时分析中...</h5>
+                    <span class="spinner-border spinner-border-sm text-primary" id="stream-spinner"></span>
+                </div>
+                <div class="card-body">
+                    <div id="stream-output" class="bg-dark text-light p-3 rounded"
+                         style="white-space:pre-wrap; min-height:200px; max-height:600px; overflow-y:auto;
+                                font-family: 'Consolas', 'Courier New', monospace; font-size: 14px; line-height: 1.6;">
+                    </div>
+                    <div class="mt-3 text-center">
+                        <small class="text-muted" id="stream-status">
+                            <i class="bi bi-broadcast"></i> 正在接收模型输出...
+                        </small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 内联结构化结果 (流结束后渲染) -->
+            <div id="inline-result" class="mt-3" style="display:none;"></div>
+
+            <!-- 再分析/返回 -->
+            <div id="post-actions" class="mt-3 text-center" style="display:none;">
+                <button type="button" class="btn btn-outline-primary" id="reanalyze-btn">
+                    <i class="bi bi-arrow-repeat"></i> 修改并再分析
+                </button>
+                <a href="{{ url_for('ai.ai_history') }}" class="btn btn-outline-secondary">
+                    <i class="bi bi-list"></i> 查看历史
+                </a>
+            </div>
+        </div>
+
+        <!-- 错误区域 -->
+        <div id="error-section" style="display:none;">
+            <div class="alert alert-danger">
+                <i class="bi bi-exclamation-triangle"></i>
+                <span id="error-message"></span>
+            </div>
+            <div class="text-center">
+                <button onclick="location.reload()" class="btn btn-outline-primary">
+                    <i class="bi bi-arrow-clockwise"></i> 重试
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    var form = document.getElementById('analysis-form');
+    if (!form) return;
+
+    var textarea = document.getElementById('input_data');
+    var charCount = document.getElementById('char-count');
+    var sceneSelect = document.getElementById('scene');
+
+    // ---- 字符计数 ----
+    function updateCharCount() {
+        if (!textarea || !charCount) return;
+        charCount.textContent = textarea.value.length + ' / 5000';
+    }
+    if (textarea) {
+        textarea.addEventListener('input', updateCharCount);
+        updateCharCount();
+    }
+
+    // ---- 场景模板快捷填充 ----
+    var scenarioBtns = document.querySelectorAll('.scenario-btn');
+    scenarioBtns.forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            if (!textarea) return;
+            textarea.value = btn.getAttribute('data-fill') || '';
+            if (sceneSelect && btn.getAttribute('data-scene')) {
+                sceneSelect.value = btn.getAttribute('data-scene');
+            }
+            updateCharCount();
+            textarea.focus();
+        });
+    });
+
+    // ---- 工具栏: 清空 / 示例 ----
+    var clearBtn = document.getElementById('clear-btn');
+    if (clearBtn) {
+        clearBtn.addEventListener('click', function() {
+            textarea.value = '';
+            updateCharCount();
+        });
+    }
+    var exampleBtn = document.getElementById('example-btn');
+    if (exampleBtn) {
+        exampleBtn.addEventListener('click', function() {
+            textarea.value = '扫描发现目标 192.168.56.101 开放了以下端口：\n' +
+                '22/tcp open OpenSSH 7.4\n' +
+                '80/tcp open Apache 2.4.57\n' +
+                '3306/tcp open MySQL 8.0\n' +
+                '请分析这些开放端口带来的安全风险，并给出加固建议。';
+            if (sceneSelect) sceneSelect.value = 'general';
+            updateCharCount();
+        });
+    }
+
+    // ---- 再分析: 回到表单 ----
+    var reanalyzeBtn = document.getElementById('reanalyze-btn');
+    if (reanalyzeBtn) {
+        reanalyzeBtn.addEventListener('click', function() {
+            document.getElementById('inline-result').style.display = 'none';
+            document.getElementById('post-actions').style.display = 'none';
+            document.getElementById('stream-output').textContent = '';
+            document.getElementById('form-section').style.display = 'block';
+            document.getElementById('stream-section').style.display = 'none';
+            if (textarea) textarea.scrollIntoView({behavior: 'smooth'});
+        });
+    }
+
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+
+        // 隐藏表单, 显示流式区域
+        document.getElementById('form-section').style.display = 'none';
+        document.getElementById('stream-section').style.display = 'block';
+
+        var formData = new FormData(form);
+        var url = form.action;
+        var output = document.getElementById('stream-output');
+        var spinner = document.getElementById('stream-spinner');
+        var status = document.getElementById('stream-status');
+
+        fetch(url, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': (document.querySelector('meta[name="csrf-token"]') || {}).getAttribute ? document.querySelector('meta[name="csrf-token"]').getAttribute('content') : ''
+            },
+            body: formData
+        }).then(function(response) {
+            if (!response.ok) {
+                throw new Error('HTTP ' + response.status);
+            }
+
+            var reader = response.body.getReader();
+            var decoder = new TextDecoder();
+            var buffer = '';
+            var analysisId = null;
+
+            function read() {
+                reader.read().then(function(result) {
+                    if (result.done) {
+                        // 流结束
+                        if (analysisId) {
+                            onStreamComplete(analysisId);
+                        }
+                        return;
+                    }
+
+                    buffer += decoder.decode(result.value, {stream: true});
+
+                    // 解析 SSE 行 (data: {...}\n\n)
+                    var lines = buffer.split('\n');
+                    buffer = lines.pop(); // 保留未完成的行
+
+                    lines.forEach(function(line) {
+                        if (line.startsWith('data: ')) {
+                            try {
+                                var data = JSON.parse(line.slice(6));
+                                if (data.type === 'token') {
+                                    output.textContent += data.content;
+                                    output.scrollTop = output.scrollHeight;
+                                } else if (data.type === 'done') {
+                                    analysisId = data.analysis_id;
+                                    onStreamComplete(analysisId);
+                                } else if (data.type === 'error') {
+                                    showError(data.message || '分析出错');
+                                }
+                            } catch(e) {
+                                // 忽略解析错误
+                            }
+                        }
+                    });
+
+                    read();
+                }).catch(function(err) {
+                    showError('网络连接中断: ' + err.message);
+                });
+            }
+
+            read();
+        }).catch(function(err) {
+            showError('请求失败: ' + err.message);
+        });
+    });
+
+    function onStreamComplete(analysisId) {
+        // 隐藏 spinner
+        document.getElementById('stream-spinner').style.display = 'none';
+        document.getElementById('stream-status').innerHTML =
+            '<i class="bi bi-check-circle text-success"></i> 分析完成，正在加载结构化结果...';
+
+        // 内联渲染结构化结果 (不跳转, 保留输入上下文)
+        fetch('/ai/api/status/' + analysisId)
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                renderInlineResult(analysisId, data);
+                document.getElementById('post-actions').style.display = 'block';
+            })
+            .catch(function() {
+                // 兜底: 跳转结果页
+                window.location.href = '/ai/result/' + analysisId;
+            });
+    }
+
+    function renderInlineResult(analysisId, data) {
+        var box = document.getElementById('inline-result');
+        if (!box) return;
+        box.innerHTML = '';
+
+        // 风险等级徽章
+        var riskBadge = data.risk_badge || 'secondary';
+        var riskLabel = data.risk_label || '未知';
+        var statusBadge = data.status_badge || 'secondary';
+        var statusLabel = data.status_label || '';
+
+        var header = document.createElement('div');
+        header.className = 'd-flex justify-content-between align-items-center mb-3';
+        header.innerHTML = '<h4><i class="bi bi-robot"></i> 分析结果 ' +
+            '<span class="badge bg-' + riskBadge + ' fs-5">' + riskLabel + '</span> ' +
+            '<span class="badge bg-' + statusBadge + '">' + statusLabel + '</span></h4>';
+        box.appendChild(header);
+
+        if (data.error_message) {
+            var err = document.createElement('div');
+            err.className = 'alert alert-danger';
+            err.textContent = data.error_message;
+            box.appendChild(err);
+        }
+
+        // 结构化字段
+        var fields = [
+            ['漏洞分析', 'bi-search', data.vulnerability_analysis],
+            ['可能攻击方式', 'bi-bug', data.possible_attack],
+            ['安全影响', 'bi-exclamation-circle', data.impact],
+            ['修复建议', 'bi-wrench', data.fix_solution],
+            ['安全建议', 'bi-shield-check', data.security_advice]
+        ];
+        fields.forEach(function(f) {
+            if (!f[2]) return;
+            var card = document.createElement('div');
+            card.className = 'card mb-3';
+            card.innerHTML = '<div class="card-header"><h6 class="mb-0"><i class="bi ' + f[1] + '"></i> ' + f[0] + '</h6></div>' +
+                '<div class="card-body lf-content"></div>';
+            card.querySelector('.card-body').innerHTML = lightFormat(f[2]);
+            box.appendChild(card);
+        });
+
+        var link = document.createElement('div');
+        link.className = 'text-center mb-2';
+        link.innerHTML = '<a href="/ai/result/' + analysisId + '" class="btn btn-sm btn-outline-info">' +
+            '<i class="bi bi-box-arrow-up-right"></i> 查看完整结果(含原始输出与 Prompt)</a>';
+        box.appendChild(link);
+
+        box.style.display = 'block';
+    }
+
+    function showError(msg) {
+        document.getElementById('stream-section').style.display = 'none';
+        document.getElementById('error-section').style.display = 'block';
+        document.getElementById('error-message').textContent = msg;
+    }
+
+    // ---- 轻量格式化 (与后端 light_format 一致, 先转义防 XSS) ----
+    function escapeHtml(s) {
+        return String(s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+    function lightFormat(text) {
+        if (!text) return '';
+        var escaped = escapeHtml(text);
+        // 围栏代码块 ```...```
+        escaped = escaped.replace(/```(?:[a-zA-Z]*)?\n([\s\S]*?)```/g,
+            '\n<pre class="bg-light border rounded p-2"><code>$1</code></pre>\n');
+        // 行内 `code`
+        escaped = escaped.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+        // 换行
+        escaped = escaped.replace(/\n/g, '<br>');
+        return escaped;
+    }
+})();
+</script>
+{% endblock %}

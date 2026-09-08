@@ -1,0 +1,283 @@
+{% extends "base.html" %}
+{% block title %}扫描任务 - WebSecLab{% endblock %}
+{% block head_extra %}
+{% if pagination.items | selectattr('status', 'in', ['running', 'created']) | list | length > 0 %}
+<!-- 列表存在进行中的任务: 整页自动刷新兜底 -->
+<meta http-equiv="refresh" content="5">
+{% endif %}
+{% endblock %}
+{% block content %}
+
+<style>
+    /* 选择模式下才显示复选框列 */
+    #scan-wrapper .select-col { display: none; }
+    #scan-wrapper.select-mode .select-col { display: table-cell; }
+</style>
+
+<div id="scan-wrapper">
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2><i class="bi bi-radar"></i> 我的扫描任务</h2>
+            <div class="d-flex gap-2">
+                <button type="button" class="btn btn-outline-danger" id="btn-enter-select"
+                        onclick="enterSelectMode()">
+                    <i class="bi bi-trash3"></i> 删除
+                </button>
+                <button type="button" class="btn btn-danger" id="btn-batch-delete"
+                        onclick="batchDelete()" disabled style="display:none">
+                    <i class="bi bi-trash3"></i> 删除
+                </button>
+                <button type="button" class="btn btn-outline-secondary" id="btn-cancel-select"
+                        onclick="exitSelectMode()" style="display:none">
+                    取消
+                </button>
+                <a href="{{ url_for('scan.scan_create') }}" class="btn btn-primary">
+                    <i class="bi bi-plus-circle"></i> 新建扫描
+                </a>
+            </div>
+        </div>
+
+        {% if pagination.items %}
+        <div class="card">
+            <form id="batch-delete-form" method="POST" action="{{ url_for('scan.scan_batch_delete') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-dark">
+                            <tr>
+                                <th class="select-col" style="width: 40px;">
+                                    <input class="form-check-input" type="checkbox"
+                                           id="check-all" title="全选/取消全选">
+                                </th>
+                            <th>ID</th>
+                            <th>目标</th>
+                            <th>类型</th>
+                            <th>端口范围</th>
+                            <th>状态</th>
+                            <th>进度</th>
+                            <th>开放端口</th>
+                            <th>创建时间</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for task in pagination.items %}
+                        <tr id="task-row-{{ task.id }}"
+                            onclick="if(!document.getElementById('scan-wrapper').classList.contains('select-mode')){location.href='{{ url_for('scan.scan_detail', task_id=task.id) }}'}"
+                            style="cursor:pointer">
+                            <td class="select-col" onclick="event.stopPropagation()">
+                                <input class="form-check-input task-checkbox" type="checkbox"
+                                       name="task_ids" value="{{ task.id }}"
+                                       data-status="{{ task.status }}"
+                                       {% if task.status in ['running', 'created'] %}disabled title="运行中的任务需先停止"{% endif %}>
+                            </td>
+                            <td><code>{{ task.id }}</code></td>
+                            <td><code>{{ task.target }}</code></td>
+                            <td>{{ task.scan_type_label }}</td>
+                            <td>{{ task.port_range }}</td>
+                            <td>
+                                <span class="badge bg-{{ task.status_badge }}" id="task-badge-{{ task.id }}">
+                                    {{ task.status_label }}
+                                </span>
+                            </td>
+                            <td id="task-progress-{{ task.id }}">
+                                {% if task.status in ['running', 'created'] %}
+                                <div class="progress" style="height: 16px; min-width: 80px;">
+                                    <div class="progress-bar progress-bar-striped progress-bar-animated"
+                                         role="progressbar"
+                                         style="width: {{ task.progress or 0 }}%;">
+                                        {{ task.progress or 0 }}%
+                                    </div>
+                                </div>
+                                {% elif task.status == 'completed' %}
+                                <span class="text-success">100%</span>
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                            <td>{{ task.open_ports_count }}</td>
+                            <td>{{ task.created_time.strftime('%Y-%m-%d %H:%M') if task.created_time else '-' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            </form>
+        </div>
+
+        <!-- 分页 -->
+        {% if pagination.pages > 1 %}
+        <nav class="mt-3">
+            <ul class="pagination justify-content-center">
+                {% for p in pagination.iter_pages() %}
+                    {% if p %}
+                        <li class="page-item {{ 'active' if p == pagination.page }}">
+                            <a class="page-link" href="{{ url_for('scan.scan_list', page=p) }}">{{ p }}</a>
+                        </li>
+                    {% else %}
+                        <li class="page-item disabled"><span class="page-link">...</span></li>
+                    {% endif %}
+                {% endfor %}
+            </ul>
+        </nav>
+        {% endif %}
+
+        {% else %}
+        <div class="card">
+            <div class="card-body text-center py-5">
+                <i class="bi bi-radar display-1 text-muted"></i>
+                <p class="mt-3 text-muted">还没有扫描任务</p>
+                <a href="{{ url_for('scan.scan_create') }}" class="btn btn-primary">创建第一个扫描任务</a>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+</div>
+
+<script>
+(function() {
+    // ===== 选择模式 & 批量删除 =====
+    var wrapper = document.getElementById('scan-wrapper');
+    var checkAll = document.getElementById('check-all');
+    var btnEnter = document.getElementById('btn-enter-select');
+    var btnBatchDelete = document.getElementById('btn-batch-delete');
+    var btnCancel = document.getElementById('btn-cancel-select');
+
+    // 进入选择模式：显示复选框列，切换按钮
+    function enterSelectMode() {
+        wrapper.classList.add('select-mode');
+        btnEnter.style.display = 'none';
+        btnBatchDelete.style.display = '';
+        btnCancel.style.display = '';
+        updateBatchButton();
+    }
+    window.enterSelectMode = enterSelectMode;
+
+    // 退出选择模式：隐藏复选框列，清空选择
+    function exitSelectMode() {
+        wrapper.classList.remove('select-mode');
+        btnEnter.style.display = '';
+        btnBatchDelete.style.display = 'none';
+        btnCancel.style.display = 'none';
+        document.querySelectorAll('.task-checkbox').forEach(function(c) { c.checked = false; });
+        checkAll.checked = false;
+        checkAll.indeterminate = false;
+        updateBatchButton();
+    }
+    window.exitSelectMode = exitSelectMode;
+
+    // 根据选中数量更新按钮文案：1 个→删除，多个→批量删除
+    function updateBatchButton() {
+        var checked = document.querySelectorAll('.task-checkbox:checked:not(:disabled)');
+        var n = checked.length;
+        btnBatchDelete.disabled = n === 0;
+        if (n === 1) {
+            btnBatchDelete.innerHTML = '<i class="bi bi-trash3"></i> 删除 (1)';
+        } else if (n > 1) {
+            btnBatchDelete.innerHTML = '<i class="bi bi-trash3"></i> 批量删除 (' + n + ')';
+        } else {
+            btnBatchDelete.innerHTML = '<i class="bi bi-trash3"></i> 删除';
+        }
+    }
+
+    // 全选 / 取消全选
+    checkAll.addEventListener('change', function() {
+        var boxes = document.querySelectorAll('.task-checkbox:not(:disabled)');
+        boxes.forEach(function(box) { box.checked = checkAll.checked; });
+        updateBatchButton();
+    });
+
+    // 单个复选框变化时同步全选状态 & 按钮文案
+    document.querySelectorAll('.task-checkbox').forEach(function(box) {
+        box.addEventListener('change', function() {
+            var allEnabled = document.querySelectorAll('.task-checkbox:not(:disabled)');
+            var allChecked = document.querySelectorAll('.task-checkbox:checked:not(:disabled)');
+            checkAll.checked = allEnabled.length > 0 && allChecked.length === allEnabled.length;
+            checkAll.indeterminate = allChecked.length > 0 && allChecked.length < allEnabled.length;
+            updateBatchButton();
+        });
+    });
+
+    function batchDelete() {
+        var checked = document.querySelectorAll('.task-checkbox:checked');
+        if (checked.length === 0) return;
+        var count = checked.length;
+        var isBatch = count > 1;
+
+        var msg = isBatch
+            ? '确定要批量删除选中的 ' + count + ' 个扫描任务吗？'
+            : '确定要删除选中的 1 个扫描任务吗？';
+        msg += '\n\n注意：正在运行的任务无法批量删除，需先手动停止。';
+
+        if (!confirm(msg)) return;
+
+        var form = document.getElementById('batch-delete-form');
+        form.submit();
+    }
+
+    // 暴露到全局，供 onclick 调用
+    window.batchDelete = batchDelete;
+
+    // ===== 运行中任务轮询 =====
+    var runningTaskIds = [];
+    {% for task in pagination.items %}
+    {% if task.status in ['running', 'created'] %}
+    runningTaskIds.push({{ task.id }});
+    {% endif %}
+    {% endfor %}
+
+    if (runningTaskIds.length === 0) {
+        // 无运行中的任务时, 每 10 秒自动刷新整页以反映新任务/状态变化 (选择模式下不刷新)
+        setInterval(function() {
+            if (!wrapper.classList.contains('select-mode')) {
+                location.reload();
+            }
+        }, 10000);
+        return;
+    }
+
+    var pollInterval = setInterval(function() {
+        runningTaskIds.forEach(function(taskId) {
+            fetch('/scan/api/status/' + taskId)
+                .then(function(resp) { return resp.json(); })
+                .then(function(data) {
+                    if (data.error) return;
+
+                    var badge = document.getElementById('task-badge-' + taskId);
+                    if (badge) {
+                        badge.textContent = data.status_label;
+                        badge.className = 'badge bg-' + data.status_badge;
+                    }
+
+                    var progressCell = document.getElementById('task-progress-' + taskId);
+                    if (progressCell && data.is_running) {
+                        progressCell.innerHTML =
+                            '<div class="progress" style="height: 16px; min-width: 80px;">' +
+                            '<div class="progress-bar progress-bar-striped progress-bar-animated" ' +
+                            'role="progressbar" style="width: ' + data.progress + '%;">' +
+                            data.progress + '%</div></div>';
+                    }
+
+                    if (!data.is_running) {
+                        if (progressCell) {
+                            progressCell.innerHTML = data.status === 'completed'
+                                ? '<span class="text-success">100%</span>'
+                                : '<span class="text-danger">-</span>';
+                        }
+
+                        var idx = runningTaskIds.indexOf(taskId);
+                        if (idx > -1) runningTaskIds.splice(idx, 1);
+
+                        if (runningTaskIds.length === 0) {
+                            clearInterval(pollInterval);
+                            location.reload();
+                        }
+                    }
+                })
+                .catch(function() {});
+        });
+    }, 3000);
+})();
+</script>
+{% endblock %}

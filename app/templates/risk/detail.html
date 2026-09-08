@@ -1,0 +1,242 @@
+{% extends "base.html" %}
+{% block title %}风险评估详情 - WebSecLab{% endblock %}
+
+{% block content %}
+<script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+
+<nav aria-label="breadcrumb" class="mb-3 d-flex justify-content-between align-items-center">
+    <ol class="breadcrumb mb-0">
+        <li class="breadcrumb-item"><a href="{{ url_for('risk.risk_list') }}">风险评估</a></li>
+        <li class="breadcrumb-item active">评估 #{{ assessment.id }}</li>
+    </ol>
+    <form method="POST"
+          action="{{ url_for('risk.risk_delete', assessment_id=assessment.id) }}"
+          onsubmit="return confirm('确定删除该风险评估记录吗？此操作不可恢复。');">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-sm btn-outline-danger">
+            <i class="bi bi-trash3"></i> 删除记录
+        </button>
+    </form>
+</nav>
+
+<div class="row g-4">
+    <!-- 左侧: 综合评分展示 -->
+    <div class="col-md-4">
+        <div class="card shadow-sm text-center">
+            <div class="card-body py-4">
+                <div class="mb-2 text-muted">综合风险评分</div>
+                <div style="font-size: 4rem; font-weight: bold; color: {{ assessment.score_color }};">
+                    {{ assessment.score_display }}
+                </div>
+                <div class="mb-3 text-muted">/ 100</div>
+                <span class="badge bg-{{ assessment.risk_badge }} fs-5 px-4 py-2">
+                    {{ assessment.risk_label }}
+                </span>
+                <div class="mt-3 text-muted small">
+                    评估时间: {{ assessment.created_time.strftime('%Y-%m-%d %H:%M') }}
+                    <br>
+                    来源:
+                    {% if assessment.source == 'auto' %}
+                    <span class="badge bg-primary">自动评估</span>
+                    {% elif assessment.source == 'ai' %}
+                    <span class="badge bg-success">AI辅助</span>
+                    {% else %}
+                    <span class="badge bg-secondary">手动评估</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- 关联信息 -->
+        <div class="card shadow-sm mt-3">
+            <div class="card-header"><h6 class="mb-0">关联信息</h6></div>
+            <div class="card-body">
+                {% if assessment.experiment %}
+                <div class="mb-2">
+                    <i class="bi bi-flask"></i> 实验:
+                    <a href="{{ url_for('exp.exp_detail', experiment_id=assessment.experiment.id) }}">
+                        {{ assessment.experiment.experiment_name }}
+                    </a>
+                </div>
+                {% endif %}
+                {% if assessment.scan_task %}
+                <div class="mb-2">
+                    <i class="bi bi-search"></i> 扫描: {{ assessment.scan_task.target }}
+                    ({{ assessment.scan_task.scan_type_label }})
+                </div>
+                {% endif %}
+                {% if assessment.vulnerability %}
+                <div class="mb-2">
+                    <i class="bi bi-bug"></i> 漏洞:
+                    <a href="{{ url_for('vuln.vuln_detail', vuln_id=assessment.vulnerability.id) }}">
+                        {{ assessment.vulnerability.name }}
+                    </a>
+                </div>
+                {% endif %}
+                {% if assessment.ai_analysis %}
+                <div class="mb-2">
+                    <i class="bi bi-robot"></i> AI分析: #{{ assessment.ai_analysis.id }}
+                    ({{ assessment.ai_analysis.risk_label }})
+                </div>
+                {% endif %}
+                {% if not assessment.experiment and not assessment.scan_task and not assessment.vulnerability and not assessment.ai_analysis %}
+                <div class="text-muted">无关联数据</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- 右侧: 五因素分析 -->
+    <div class="col-md-8">
+        <!-- 评分公式说明 -->
+        <div class="card shadow-sm mb-3">
+            <div class="card-header bg-dark text-white">
+                <h6 class="mb-0"><i class="bi bi-calculator"></i> 多因素风险评分模型</h6>
+            </div>
+            <div class="card-body">
+                <p class="text-muted mb-2">
+                    <code>FinalScore = (CVSS×0.35 + Asset×0.20 + Exploit×0.20 + Exposure×0.10 + AI×0.15) × 10</code>
+                </p>
+                <p class="text-muted small mb-0">
+                    区别于直接采用 CVSS 评分，本模型综合考量漏洞基础评分、资产重要程度、
+                    漏洞利用成功率、暴露程度和 AI 分析可信度五个维度，生成 0~100 的综合评分。
+                </p>
+            </div>
+        </div>
+
+        <!-- 雷达图 -->
+        <div class="card shadow-sm mb-3">
+            <div class="card-header"><h6 class="mb-0">五因素雷达图</h6></div>
+            <div class="card-body">
+                <div id="radarChart" style="height: 320px;"></div>
+            </div>
+        </div>
+
+        <!-- 因素明细表 -->
+        <div class="card shadow-sm">
+            <div class="card-header"><h6 class="mb-0">评分明细</h6></div>
+            <div class="card-body p-0">
+                <table class="table table-striped mb-0">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>因素</th>
+                            <th>说明</th>
+                            <th>评分 (0~10)</th>
+                            <th>权重</th>
+                            <th>加权贡献</th>
+                            <th>贡献占比</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% set factors = [
+                            ('CVSS', '漏洞基础评分', assessment.cvss_score, 0.35),
+                            ('Asset', '资产重要程度', assessment.asset_score, 0.20),
+                            ('Exploit', '漏洞利用成功率', assessment.exploit_score, 0.20),
+                            ('Exposure', '暴露程度', assessment.exposure_score, 0.10),
+                            ('AI', 'AI分析可信度', assessment.ai_score, 0.15),
+                        ] %}
+                        {% for name, desc, score, weight in factors %}
+                        {% set weighted = score * weight %}
+                        {% set total_weighted = assessment.final_score / 10 if assessment.final_score > 0 else 1 %}
+                        {% set pct = (weighted / total_weighted * 100) if total_weighted > 0 else 0 %}
+                        <tr>
+                            <td><strong>{{ name }}</strong></td>
+                            <td class="text-muted small">{{ desc }}</td>
+                            <td>
+                                <div class="d-flex align-items-center gap-2">
+                                    <div class="progress flex-grow-1" style="height: 8px;">
+                                        <div class="progress-bar" style="width: {{ score * 10 }}%;"
+                                             role="progressbar"></div>
+                                    </div>
+                                    <span class="fw-bold">{{ '%.1f' | format(score) }}</span>
+                                </div>
+                            </td>
+                            <td>{{ '%.0f' | format(weight * 100) }}%</td>
+                            <td><strong>{{ '%.2f' | format(weighted) }}</strong></td>
+                            <td>
+                                <div class="progress" style="height: 6px;">
+                                    <div class="progress-bar bg-{{ 'dark' if pct > 30 else 'primary' }}"
+                                         style="width: {{ pct }}%;"></div>
+                                </div>
+                                <small>{{ '%.1f' | format(pct) }}%</small>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot class="table-dark">
+                        <tr>
+                            <td colspan="2"><strong>最终评分</strong></td>
+                            <td colspan="2"></td>
+                            <td><strong>{{ '%.2f' | format(assessment.final_score / 10) }}</strong></td>
+                            <td><strong style="color: {{ assessment.score_color }}">
+                                {{ assessment.score_display }} / 100
+                            </strong></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+
+        <!-- 风险等级参考 -->
+        <div class="card shadow-sm mt-3">
+            <div class="card-header"><h6 class="mb-0">风险等级参考</h6></div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-3">
+                        <span class="badge bg-dark fs-6 px-3 py-2">Critical</span>
+                        <div class="small text-muted mt-1">80~100 分</div>
+                    </div>
+                    <div class="col-3">
+                        <span class="badge bg-danger fs-6 px-3 py-2">High</span>
+                        <div class="small text-muted mt-1">60~79 分</div>
+                    </div>
+                    <div class="col-3">
+                        <span class="badge bg-warning fs-6 px-3 py-2">Medium</span>
+                        <div class="small text-muted mt-1">40~59 分</div>
+                    </div>
+                    <div class="col-3">
+                        <span class="badge bg-info fs-6 px-3 py-2">Low</span>
+                        <div class="small text-muted mt-1">0~39 分</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// 五因素雷达图
+var radarChart = echarts.init(document.getElementById('radarChart'));
+radarChart.setOption({
+    radar: {
+        indicator: [
+            { name: 'CVSS\n漏洞评分', max: 10 },
+            { name: 'Asset\n资产重要度', max: 10 },
+            { name: 'Exploit\n利用成功率', max: 10 },
+            { name: 'Exposure\n暴露程度', max: 10 },
+            { name: 'AI\n分析可信度', max: 10 }
+        ],
+        shape: 'polygon',
+        splitArea: { areaStyle: { color: ['#f8f9fa','#e9ecef','#dee2e6','#ced4da','#adb5bd'] } }
+    },
+    series: [{
+        type: 'radar',
+        data: [{
+            value: [
+                {{ assessment.cvss_score }},
+                {{ assessment.asset_score }},
+                {{ assessment.exploit_score }},
+                {{ assessment.exposure_score }},
+                {{ assessment.ai_score }}
+            ],
+            name: '风险因素',
+            areaStyle: { color: 'rgba(220, 53, 69, 0.2)' },
+            lineStyle: { color: '#dc3545', width: 2 },
+            itemStyle: { color: '#dc3545' }
+        }]
+    }],
+    tooltip: {}
+});
+window.addEventListener('resize', function() { radarChart.resize(); });
+</script>
+{% endblock %}

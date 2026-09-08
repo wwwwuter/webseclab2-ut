@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}新增Prompt模板 - WebSecLab{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-10">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-plus-circle"></i> 新增Prompt模板</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="template_key" class="form-label">
+                                模板标识 <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" class="form-control" id="template_key" name="template_key"
+                                   placeholder="如: vuln_csrf, vuln_ssrf" required>
+                            <div class="form-text">唯一标识，仅支持英文、数字和下划线</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="name" class="form-label">
+                                模板名称 <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" class="form-control" id="name" name="name"
+                                   placeholder="如: CSRF漏洞分析模板" required>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="scene" class="form-label">场景分类</label>
+                            <select class="form-select" id="scene" name="scene">
+                                <option value="general">通用分析</option>
+                                <option value="sql_injection">SQL注入</option>
+                                <option value="xss">XSS跨站脚本</option>
+                                <option value="file_upload">文件上传</option>
+                                <option value="command_injection">命令注入</option>
+                                <option value="scan">端口扫描</option>
+                            </select>
+                            <div class="form-text">AI分析对应类型漏洞时自动选用此模板</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="description" class="form-label">描述</label>
+                            <input type="text" class="form-control" id="description" name="description"
+                                   placeholder="模板用途说明">
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="content" class="form-label">
+                            模板内容 <span class="text-danger">*</span>
+                        </label>
+                        <textarea class="form-control font-monospace" id="content" name="content"
+                                  rows="18" required
+                                  style="font-size: 13px; line-height: 1.5;"
+                                  placeholder="你是一名网络安全专家...&#10;&#10;请输出严格的JSON格式:&#10;{&#10;  &quot;risk_level&quot;: &quot;...&quot;,&#10;  ...&#10;}"></textarea>
+                        <div class="form-text">
+                            使用 <code>{vulnerability_name}</code> 等变量引用动态数据，
+                            JSON中的花括号需使用 <code>{'{{'}{{ '}}'}</code> 转义
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="variables" class="form-label">可用变量 (JSON格式)</label>
+                        <textarea class="form-control font-monospace" id="variables" name="variables"
+                                  rows="4" style="font-size: 13px;">{
+    "vulnerability_name": "漏洞名称",
+    "vulnerability_description": "漏洞描述",
+    "vulnerability_category": "漏洞分类",
+    "vulnerability_severity": "严重程度",
+    "vulnerability_solution": "修复方案",
+    "rag_context": "参考资料",
+    "scan_results": "扫描结果",
+    "target": "扫描目标",
+    "dvwa_level": "DVWA等级",
+    "experiment_name": "实验名称"
+}</textarea>
+                    </div>
+
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" class="form-check-input" id="is_active" name="is_active" checked>
+                        <label class="form-check-label" for="is_active">立即启用</label>
+                    </div>
+
+                    <div class="d-grid gap-2 d-md-flex">
+                        <button type="submit" class="btn btn-dark">
+                            <i class="bi bi-plus-circle"></i> 创建模板
+                        </button>
+                        <a href="{{ url_for('ai.admin_templates') }}" class="btn btn-outline-secondary">
+                            <i class="bi bi-x-lg"></i> 取消
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

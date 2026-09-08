@@ -1,0 +1,170 @@
+{# Prompt模板列表片段 - 供整页 include 与 HTMX 局部刷新共用 #}
+{% if templates %}
+{% set scenes = {} %}
+{% for t in templates %}
+    {% set scene = t.scene or 'general' %}
+    {% if scene not in scenes %}
+        {% if scenes.update({scene: []}) %}{% endif %}
+    {% endif %}
+    {% if scenes[scene].append(t) %}{% endif %}
+{% endfor %}
+
+{% set scene_labels = {
+    'general': ('通用模板', 'bi-gear', '分析通用安全问题的基础模板'),
+    'sql_injection': ('SQL注入', 'bi-database', '针对SQL注入漏洞的专用分析模板'),
+    'xss': ('XSS跨站脚本', 'bi-code-slash', '针对XSS漏洞的专用分析模板'),
+    'file_upload': ('文件上传', 'bi-file-earmark-arrow-up', '针对文件上传漏洞的专用分析模板'),
+    'command_injection': ('命令注入', 'bi-terminal', '针对命令注入漏洞的专用分析模板'),
+    'scan': ('端口扫描', 'bi-radar', '针对端口扫描结果的专用分析模板'),
+} %}
+
+{% for scene_key, scene_info in scene_labels.items() %}
+{% if scene_key in scenes %}
+<div class="card mb-3">
+    <div class="card-header bg-dark text-white d-flex justify-content-between">
+        <span><i class="bi {{ scene_info[1] }}"></i> {{ scene_info[0] }}</span>
+        <small class="text-white-50">{{ scene_info[2] }}</small>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>名称</th>
+                    <th>标识</th>
+                    <th>描述</th>
+                    <th>内容预览</th>
+                    <th>版本</th>
+                    <th>状态</th>
+                    <th>最后修改</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for t in scenes[scene_key] %}
+                <tr>
+                    <td><strong>{{ t.name }}</strong></td>
+                    <td><code>{{ t.template_key }}</code></td>
+                    <td>{{ t.description[:50] }}{% if t.description|length > 50 %}...{% endif %}</td>
+                    <td>
+                        <span class="text-muted small d-block text-truncate" style="max-width:240px;"
+                              title="{{ t.content }}">{{ t.content[:60] }}{% if t.content|length > 60 %}…{% endif %}</span>
+                    </td>
+                    <td><span class="badge bg-light text-dark">v{{ t.version }}</span></td>
+                    <td>
+                        {% if t.is_active %}
+                        <span class="badge bg-success">启用</span>
+                        {% else %}
+                        <span class="badge bg-secondary">禁用</span>
+                        {% endif %}
+                        {% if t.is_default %}
+                        <span class="badge bg-info">默认</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ t.updated_time.strftime('%Y-%m-%d %H:%M') if t.updated_time else '-' }}</td>
+                    <td class="text-nowrap">
+                        <a href="{{ url_for('ai.admin_edit_template', template_id=t.id) }}"
+                           class="btn btn-sm btn-outline-primary" title="编辑">
+                            <i class="bi bi-pencil"></i>
+                        </a>
+                        {% if t.is_default %}
+                        <form method="POST"
+                              action="{{ url_for('ai.admin_reset_template', template_id=t.id) }}"
+                              class="d-inline"
+                              onsubmit="return confirm('确定重置为默认内容？');">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-sm btn-outline-warning" title="重置为默认">
+                                <i class="bi bi-arrow-counterclockwise"></i>
+                            </button>
+                        </form>
+                        {% else %}
+                        <form method="POST"
+                              action="{{ url_for('ai.admin_toggle_template', template_id=t.id) }}"
+                              class="d-inline">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-sm btn-outline-{{ 'secondary' if t.is_active else 'success' }}"
+                                    title="{{ '禁用' if t.is_active else '启用' }}">
+                                <i class="bi bi-{{ 'pause' if t.is_active else 'play' }}"></i>
+                            </button>
+                        </form>
+                        {% endif %}
+                        {# 删除: 默认模板灰显禁用, 自定义模板可删 #}
+                        {% if t.is_default %}
+                        <span class="btn btn-sm btn-outline-secondary opacity-50"
+                              style="cursor:not-allowed;"
+                              title="系统默认模板不可删除">  <!-- Bootstrap 5 无 disabled 样式, 用 CSS 模拟 -->
+                            <i class="bi bi-trash"></i>
+                        </span>
+                        {% else %}
+                        <form method="POST"
+                              action="{{ url_for('ai.admin_delete_template', template_id=t.id) }}"
+                              class="d-inline"
+                              onsubmit="return confirm('确定删除模板 [{{ t.name }}] 吗？此操作不可恢复！');">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-sm btn-outline-danger" title="删除">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </form>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+{% endfor %}
+
+{% for scene_key, scene_templates in scenes.items() %}
+{% if scene_key not in scene_labels %}
+<div class="card mb-3">
+    <div class="card-header bg-dark text-white">
+        <i class="bi bi-tag"></i> {{ scene_key }}
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead class="table-light">
+                <tr><th>名称</th><th>标识</th><th>内容预览</th><th>版本</th><th>状态</th><th>操作</th></tr>
+            </thead>
+            <tbody>
+                {% for t in scene_templates %}
+                <tr>
+                    <td><strong>{{ t.name }}</strong></td>
+                    <td><code>{{ t.template_key }}</code></td>
+                    <td>
+                        <span class="text-muted small d-block text-truncate" style="max-width:240px;"
+                              title="{{ t.content }}">{{ t.content[:60] }}{% if t.content|length > 60 %}…{% endif %}</span>
+                    </td>
+                    <td>v{{ t.version }}</td>
+                    <td>{% if t.is_active %}<span class="badge bg-success">启用</span>{% else %}<span class="badge bg-secondary">禁用</span>{% endif %}</td>
+                    <td class="text-nowrap">
+                        <a href="{{ url_for('ai.admin_edit_template', template_id=t.id) }}" class="btn btn-sm btn-outline-primary" title="编辑"><i class="bi bi-pencil"></i></a>
+                        {% if t.is_default %}
+                        <span class="btn btn-sm btn-outline-secondary opacity-50"
+                              style="cursor:not-allowed;" title="系统默认模板不可删除">
+                            <i class="bi bi-trash"></i>
+                        </span>
+                        {% else %}
+                        <form method="POST" action="{{ url_for('ai.admin_delete_template', template_id=t.id) }}"
+                              class="d-inline"
+                              onsubmit="return confirm('确定删除模板 [{{ t.name }}] 吗？此操作不可恢复！');">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-sm btn-outline-danger" title="删除"><i class="bi bi-trash"></i></button>
+                        </form>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+{% endfor %}
+
+{% else %}
+<div class="text-center py-5 text-muted">
+    <i class="bi bi-inbox display-1"></i>
+    <p class="mt-3">未找到符合条件的模板，<a href="{{ url_for('ai.admin_templates') }}">清除筛选</a></p>
+</div>
+{% endif %}

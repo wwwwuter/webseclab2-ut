@@ -1,0 +1,272 @@
+<!-- 风险评估列表片段 (HTMX 局部刷新) -->
+
+<style>
+/* 选择模式: 默认隐藏复选框列, 进入选择模式后显示 */
+.risk-table .select-col { display: none; }
+.risk-table.select-mode .select-col { display: table-cell; }
+.risk-table.select-mode tbody tr { cursor: pointer; }
+.risk-table:not(.select-mode) tbody tr { cursor: pointer; }
+.btn-confirm-delete:not(:disabled):hover { color: #dc3545; border-color: #dc3545; }
+</style>
+
+<!-- 统计卡片 -->
+<div class="row g-3 mb-4">
+    <div class="col-md-2">
+        <div class="card text-center shadow-sm">
+            <div class="card-body py-3">
+                <div class="text-muted small">总评估</div>
+                <h3 class="mb-0">{{ stats.total }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card text-center shadow-sm">
+            <div class="card-body py-3">
+                <div class="text-muted small">平均评分</div>
+                <h3 class="mb-0">{{ stats.avg_score }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card text-center shadow-sm border-start border-dark border-4">
+            <div class="card-body py-3">
+                <div class="text-muted small">严重</div>
+                <h3 class="mb-0 text-dark">{{ stats.critical }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card text-center shadow-sm border-start border-danger border-4">
+            <div class="card-body py-3">
+                <div class="text-muted small">高危</div>
+                <h3 class="mb-0 text-danger">{{ stats.high }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card text-center shadow-sm border-start border-warning border-4">
+            <div class="card-body py-3">
+                <div class="text-muted small">中危</div>
+                <h3 class="mb-0 text-warning">{{ stats.medium }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card text-center shadow-sm border-start border-info border-4">
+            <div class="card-body py-3">
+                <div class="text-muted small">低危</div>
+                <h3 class="mb-0 text-info">{{ stats.low }}</h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 评估历史列表 -->
+<div class="card shadow-sm">
+    <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-list-ul"></i> 评估历史
+        <span class="badge bg-light text-dark ms-1">{{ pagination.total }} 条记录</span></span>
+        <div class="d-flex gap-2">
+            <button type="button" class="btn btn-outline-light btn-sm" id="enterSelectBtn">
+                <i class="bi bi-trash3"></i> 删除
+            </button>
+            <button type="button" class="btn btn-outline-light btn-sm" id="exitSelectBtn" style="display:none;">
+                <i class="bi bi-x-circle"></i> 取消
+            </button>
+            <button type="submit"
+                    form="batchDeleteForm"
+                    class="btn btn-outline-light btn-sm btn-confirm-delete"
+                    id="confirmDeleteBtn"
+                    style="display:none;"
+                    disabled>
+                <i class="bi bi-trash3"></i> 删除选中 (<span id="selectedCount">0</span>)
+            </button>
+        </div>
+    </div>
+
+    <!-- 批量删除表单 -->
+    <form id="batchDeleteForm"
+          method="POST"
+          action="{{ url_for('risk.risk_batch_delete') }}"
+          hx-post="{{ url_for('risk.risk_batch_delete') }}"
+          hx-target="#riskListSection"
+          hx-swap="innerHTML"
+          hx-confirm="确定要删除选中的记录吗？此操作不可恢复。">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="ids" value="" id="batchDeleteIds">
+        <input type="hidden" name="page" value="{{ pagination.page }}" id="batchDeletePage">
+
+    <div class="card-body p-0">
+        {% if pagination.items %}
+        <div class="table-responsive">
+            <table class="table table-striped table-hover mb-0 risk-table" id="riskTable">
+                <thead class="table-dark">
+                    <tr>
+                        <th class="select-col text-center" style="width: 40px;">
+                            <input type="checkbox" class="form-check-input select-all-check"
+                                   id="selectAllCheck" title="全选/取消全选">
+                        </th>
+                        <th>ID</th>
+                        <th>评分</th>
+                        <th>风险等级</th>
+                        <th>CVSS</th>
+                        <th>资产</th>
+                        <th>利用</th>
+                        <th>暴露</th>
+                        <th>AI</th>
+                        <th>来源</th>
+                        <th>时间</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for a in pagination.items %}
+                    <tr data-href="{{ url_for('risk.risk_detail', assessment_id=a.id) }}">
+                        <td class="select-col text-center align-middle row-checkbox-cell">
+                            <input type="checkbox" class="form-check-input row-select-check"
+                                   name="row_ids" value="{{ a.id }}">
+                        </td>
+                        <td>{{ a.id }}</td>
+                        <td>
+                            <strong style="color: {{ a.score_color }}">{{ a.score_display }}</strong>
+                        </td>
+                        <td>
+                            <span class="badge bg-{{ a.risk_badge }}">{{ a.risk_label }}</span>
+                        </td>
+                        <td>{{ '%.1f' | format(a.cvss_score) }}</td>
+                        <td>{{ '%.1f' | format(a.asset_score) }}</td>
+                        <td>{{ '%.1f' | format(a.exploit_score) }}</td>
+                        <td>{{ '%.1f' | format(a.exposure_score) }}</td>
+                        <td>{{ '%.1f' | format(a.ai_score) }}</td>
+                        <td>
+                            {% if a.source == 'auto' %}
+                            <span class="badge bg-primary">自动</span>
+                            {% elif a.source == 'ai' %}
+                            <span class="badge bg-success">AI</span>
+                            {% else %}
+                            <span class="badge bg-secondary">手动</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ a.created_time.strftime('%m-%d %H:%M') }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- 分页 -->
+        {% if pagination.pages > 1 %}
+        <nav class="px-3 py-2 d-flex justify-content-between align-items-center">
+            <small class="text-muted">第 {{ pagination.page }}/{{ pagination.pages }} 页</small>
+            <ul class="pagination pagination-sm mb-0">
+                {% if pagination.has_prev %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('risk.risk_list', page=pagination.prev_num) }}">上一页</a>
+                </li>
+                {% endif %}
+                {% for p in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                    {% if p %}
+                    <li class="page-item {% if p == pagination.page %}active{% endif %}">
+                        <a class="page-link" href="{{ url_for('risk.risk_list', page=p) }}">{{ p }}</a>
+                    </li>
+                    {% else %}
+                    <li class="page-item disabled"><span class="page-link">...</span></li>
+                    {% endif %}
+                {% endfor %}
+                {% if pagination.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('risk.risk_list', page=pagination.next_num) }}">下一页</a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+
+        {% else %}
+        <div class="text-center py-5 text-muted">
+            <i class="bi bi-shield" style="font-size: 3rem;"></i>
+            <p class="mt-2">暂无风险评估记录</p>
+            <p>点击上方「批量评估实验」按钮，系统将自动为实验生成风险评估</p>
+        </div>
+        {% endif %}
+    </div>
+    </form>
+</div>
+
+<script>
+(function() {
+    var table = document.getElementById('riskTable');
+    var enterBtn = document.getElementById('enterSelectBtn');
+    var exitBtn = document.getElementById('exitSelectBtn');
+    var confirmBtn = document.getElementById('confirmDeleteBtn');
+    var selAll = document.getElementById('selectAllCheck');
+    var allChecks = document.querySelectorAll('.row-select-check');
+    var countEl = document.getElementById('selectedCount');
+
+    // 进入选择模式
+    function enterSelectMode() {
+        table.classList.add('select-mode');
+        enterBtn.style.display = 'none';
+        exitBtn.style.display = 'inline-block';
+        confirmBtn.style.display = 'inline-block';
+        bindRowClicks();
+    }
+    // 退出选择模式
+    function exitSelectMode() {
+        table.classList.remove('select-mode');
+        enterBtn.style.display = 'inline-block';
+        exitBtn.style.display = 'none';
+        confirmBtn.style.display = 'none';
+        // 清空选择
+        allChecks.forEach(function(c) { c.checked = false; });
+        if (selAll) { selAll.checked = false; selAll.indeterminate = false; }
+        updateState();
+        bindRowClicks();
+    }
+
+    function updateState() {
+        var checked = document.querySelectorAll('.row-select-check:checked');
+        var n = checked.length;
+        countEl.textContent = n;
+        confirmBtn.disabled = n === 0;
+        if (selAll) {
+            selAll.checked = n === allChecks.length && n > 0;
+            selAll.indeterminate = n > 0 && n < allChecks.length;
+        }
+        var ids = [];
+        checked.forEach(function(c) { ids.push(parseInt(c.value)); });
+        document.getElementById('batchDeleteIds').value = JSON.stringify(ids);
+    }
+
+    // 行点击行为: 选择模式 -> 切换勾选; 普通模式 -> 跳详情
+    function bindRowClicks() {
+        document.querySelectorAll('.risk-table tbody tr[data-href]').forEach(function(row) {
+            // 先移除旧监听再添加, 避免重复绑定 (HTMX 重渲染时会重新执行)
+            row.onclick = function(e) {
+                if (table.classList.contains('select-mode')) {
+                    var cb = this.querySelector('.row-select-check');
+                    if (!cb) return;
+                    if (e.target === cb) { updateState(); return; }  // 直接点 checkbox: 用原生切换
+                    cb.checked = !cb.checked;                          // 点行其它位置: 切换
+                    updateState();
+                } else {
+                    window.location.href = this.getAttribute('data-href');
+                }
+            };
+        });
+    }
+
+    if (enterBtn) enterBtn.addEventListener('click', enterSelectMode);
+    if (exitBtn) exitBtn.addEventListener('click', exitSelectMode);
+    if (selAll) {
+        selAll.addEventListener('change', function() {
+            allChecks.forEach(function(c) { c.checked = this.checked; }, this);
+            updateState();
+        });
+    }
+    allChecks.forEach(function(c) { c.addEventListener('change', updateState); });
+
+    // 初始: 普通模式
+    updateState();
+    bindRowClicks();
+})();
+</script>

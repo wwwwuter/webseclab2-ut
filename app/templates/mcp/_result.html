@@ -1,0 +1,123 @@
+{# 单工具执行结果 — AI Agent 风格卡片 #}
+{# 数据: result (ToolResult), tool_name (str) #}
+
+{% set t_colors = {'scanner':'#0d6efd','nmap':'#6f42c1','knowledge':'#198754','risk':'#dc3545','dashboard':'#fd7e14','report':'#0dcaf0'} %}
+{% set t_icons = {'scanner':'bi-wifi','nmap':'bi-radar','knowledge':'bi-book','risk':'bi-shield-exclamation','dashboard':'bi-speedometer2','report':'bi-file-earmark-text'} %}
+{% set color = t_colors.get(tool_name, '#6c757d') %}
+{% set icon = t_icons.get(tool_name, 'bi-gear') %}
+{% set td = result.data if result.success else {} %}
+
+<style>
+.sr-card{border-radius:10px;overflow:hidden;border:1px solid #e2e8f0;margin-bottom:.75rem;animation:aiFadeIn .4s ease forwards;opacity:0;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+@keyframes aiFadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.sr-header{padding:.55rem .85rem;display:flex;justify-content:space-between;align-items:center;font-size:.85rem;font-weight:600}
+.sr-header.ok{background:#f0fdf4;color:#166534;border-bottom:1px solid #bbf7d0}
+.sr-header.fail{background:#fef2f2;color:#991b1b;border-bottom:1px solid #fecaca}
+.sr-body{padding:.7rem .85rem;font-size:.83rem}
+.sr-kv{display:flex;justify-content:space-between;padding:.35rem 0;border-bottom:1px solid #f5f5f5}
+.sr-kv:last-child{border-bottom:none}
+.sr-kv .k{color:#6c757d;font-size:.78rem}
+.sr-kv .v{font-weight:600;font-size:.82rem;text-align:right}
+.sr-badge{display:inline-flex;align-items:center;gap:.2rem;padding:.15rem .45rem;background:#f0f4f8;border-radius:5px;font-size:.76rem;margin:2px}
+.sr-badge b{color:#1a73e8}
+.sr-port{display:inline-flex;align-items:center;gap:.15rem;padding:.15rem .4rem;background:#fef3c7;border-radius:5px;font-size:.73rem;font-weight:600;margin:2px;color:#92400e}
+.sr-vuln-row{display:flex;align-items:center;gap:.4rem;padding:.35rem 0;border-bottom:1px solid #f5f5f5}
+.sr-vuln-row:last-child{border-bottom:none}
+.sr-sev{display:inline-block;padding:.08rem .4rem;border-radius:4px;font-size:.7rem;font-weight:700;color:#fff}
+.sr-sev-critical{background:#dc3545}.sr-sev-high{background:#e74c3c}.sr-sev-medium{background:#f39c12}.sr-sev-low{background:#27ae60}.sr-sev-info{background:#6c757d}
+.sr-risk-bar{height:6px;background:#e5e7eb;border-radius:3px;overflow:hidden;margin-top:2px}
+.sr-risk-fill{height:100%;border-radius:3px}
+</style>
+
+<div class="sr-card">
+    <div class="sr-header {{ 'ok' if result.success else 'fail' }}">
+        <span>
+            <i class="bi {{ icon }} me-1" style="color:{{ color }}"></i>
+            <i class="bi bi-{{ 'check-circle-fill' if result.success else 'x-circle-fill' }} me-1"></i>
+            {{ tool_name|capitalize }}
+        </span>
+        {% if result.elapsed_ms %}
+        <span style="font-weight:400;font-size:.75rem;opacity:.7">{{ result.elapsed_ms }}ms</span>
+        {% endif %}
+    </div>
+    <div class="sr-body">
+        {% if not result.success %}
+            <div class="text-danger">{{ result.error }}</div>
+        {% elif tool_name == 'dashboard' %}
+            <div class="sr-kv"><span class="k">实验数量</span><span class="v">{{ td.get('experiments', 0) }}</span></div>
+            <div class="sr-kv"><span class="k">扫描数量</span><span class="v">{{ td.get('scans', 0) }}</span></div>
+            <div class="sr-kv"><span class="k">AI 分析</span><span class="v">{{ td.get('ai_analyses', 0) }}</span></div>
+            <div class="sr-kv"><span class="k">报告数量</span><span class="v">{{ td.get('reports', 0) }}</span></div>
+        {% elif tool_name in ['scanner', 'nmap'] %}
+            <div class="sr-kv"><span class="k">目标</span><span class="v">{{ td.get('target', '—') }}</span></div>
+            <div class="sr-kv"><span class="k">任务 ID</span><span class="v">#{{ td.get('task_id', '—') }}</span></div>
+            <div class="sr-kv"><span class="k">状态</span><span class="v">{{ td.get('status', '—') }}</span></div>
+            {% if td.get('latest_completed') %}
+            <div class="mt-2">
+                <div class="k mb-1" style="font-size:.76rem">开放端口 ({{ td.latest_completed.get('open_ports', 0) }})</div>
+                {% for p in td.latest_completed.get('ports', []) %}
+                <span class="sr-port">{{ p.port }}/{{ p.get('service', '?') }}</span>
+                {% endfor %}
+            </div>
+            {% endif %}
+        {% elif tool_name == 'knowledge' %}
+            {% if td.get('vulnerabilities') %}
+                {% for v in td.vulnerabilities[:6] %}
+                <div class="sr-vuln-row">
+                    <span class="sr-sev sr-sev-{{ v.get('severity','info')|lower }}">{{ v.get('severity','?') }}</span>
+                    <strong>{{ v.name }}</strong>
+                    {% if v.get('cve') %}<span class="sr-badge" style="font-size:.68rem">{{ v.cve }}</span>{% endif %}
+                </div>
+                {% endfor %}
+                {% if td.vulnerabilities|length > 6 %}
+                <div class="text-muted small mt-1">... 还有 {{ td.vulnerabilities|length - 6 }} 条</div>
+                {% endif %}
+            {% elif td.get('name') %}
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <span class="sr-sev sr-sev-{{ td.get('severity','info')|lower }}">{{ td.get('severity','?') }}</span>
+                    <strong>{{ td.name }}</strong>
+                </div>
+                {% if td.get('description') %}
+                <div class="text-muted" style="font-size:.8rem">{{ td.description }}</div>
+                {% endif %}
+                {% if td.get('solution') %}
+                <div class="mt-2" style="font-size:.8rem"><i class="bi bi-wrench"></i> {{ td.solution }}</div>
+                {% endif %}
+            {% elif td.get('statistics') %}
+                <div class="sr-kv"><span class="k">总漏洞记录</span><span class="v">{{ td.statistics.get('total', 0) }}</span></div>
+            {% else %}
+                <div>{{ result.summary }}</div>
+            {% endif %}
+        {% elif tool_name == 'risk' %}
+            {% set score = td.get('final_score', 0) %}
+            {% set risk_colors = {'Critical':'#dc3545','High':'#e74c3c','Medium':'#f39c12','Low':'#27ae60'} %}
+            {% set rc = risk_colors.get(td.get('risk_level',''), '#6c757d') %}
+            <div class="sr-kv">
+                <span class="k">综合评分</span>
+                <span class="v" style="color:{{ rc }};font-size:1rem">{{ score|round(1) }} / 100</span>
+            </div>
+            <div class="sr-risk-bar mt-1 mb-2"><div class="sr-risk-fill" style="width:{{ score|round }}%;background:{{ rc }}"></div></div>
+            <div class="sr-kv"><span class="k">风险等级</span><span class="v"><span class="sr-sev sr-sev-{{ td.get('risk_level','info')|lower }}">{{ td.get('risk_label', '—') }}</span></span></div>
+            <div class="sr-kv"><span class="k">CVSS</span><span class="v">{{ td.get('cvss',0)|round(1) }}</span></div>
+            <div class="sr-kv"><span class="k">资产价值</span><span class="v">{{ td.get('asset',0)|round(1) }}</span></div>
+            <div class="sr-kv"><span class="k">利用难度</span><span class="v">{{ td.get('exploit',0)|round(1) }}</span></div>
+            <div class="sr-kv"><span class="k">暴露面</span><span class="v">{{ td.get('exposure',0)|round(1) }}</span></div>
+            <div class="sr-kv"><span class="k">AI 置信度</span><span class="v">{{ td.get('ai_confidence',0)|round(1) }}</span></div>
+        {% elif tool_name == 'report' %}
+            {% for sec in td.get('sections', []) %}
+            <div class="mb-2">
+                <div style="font-weight:600;font-size:.82rem;margin-bottom:2px"><i class="bi bi-file-text me-1"></i>{{ sec.title }}</div>
+                <pre style="font-size:.76rem;background:#f8f9fa;padding:.4rem .6rem;border-radius:4px;margin:0;white-space:pre-wrap;max-height:160px;overflow-y:auto">{{ sec.content }}</pre>
+            </div>
+            {% endfor %}
+            {% if not td.get('sections') %}
+            <div class="text-muted">{{ result.summary }}</div>
+            {% endif %}
+        {% else %}
+            {% if result.summary %}<div class="mb-1">{{ result.summary }}</div>{% endif %}
+            {% if td %}
+            <pre style="font-size:.76rem;background:#f8f9fa;padding:.4rem .6rem;border-radius:4px;margin:0;max-height:200px;overflow-y:auto">{{ td }}</pre>
+            {% endif %}
+        {% endif %}
+    </div>
+</div>
