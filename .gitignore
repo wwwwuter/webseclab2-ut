@@ -26,3 +26,4 @@ venv/
 database/*.db
 database/*.sqlite3
 logs/
+reports/
