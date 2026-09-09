@@ -9,14 +9,15 @@
 {% block content %}
 {# ============ 未登录态: 仅展示 模块①系统状态 + 模块②快捷操作 + 欢迎 ============ #}
 {% if not current_user.is_authenticated %}
-<div class="welcome-banner mb-4">
+<div class="welcome-banner mb-4 soc-fade-up">
     <div class="row align-items-center">
         <div class="col-lg-8">
-            <h2 class="fw-bold mb-2"><i class="bi bi-shield-lock text-primary"></i> WebSecLab · AI 驱动的网络安全实验平台</h2>
-            <p class="text-muted mb-3">围绕「实验 → 扫描 → AI分析 → 风险评估 → 报告」完整业务闭环，3 秒内掌握平台状态并一键进入实战。</p>
+            <div class="hero-badge mb-2"><i class="bi bi-shield-lock me-1"></i> AI 驱动的网络安全实验平台</div>
+            <h2 class="fw-bold mb-2">WebSecLab</h2>
+            <p class="mb-3">围绕「实验 → 扫描 → AI分析 → 风险评估 → 报告」完整业务闭环，3 秒内掌握平台状态并一键进入实战。</p>
             <div class="d-flex gap-2 flex-wrap">
                 <a href="{{ url_for('auth.login') }}" class="btn btn-primary"><i class="bi bi-box-arrow-in-right"></i> 登录</a>
-                <a href="{{ url_for('auth.register') }}" class="btn btn-outline-secondary"><i class="bi bi-person-plus"></i> 注册</a>
+                <a href="{{ url_for('auth.register') }}" class="btn btn-outline-light"><i class="bi bi-person-plus"></i> 注册</a>
             </div>
         </div>
         <div class="col-lg-4 text-lg-end">
@@ -292,7 +293,7 @@
 {% endblock %}
 
 {% block extra_js %}
-{# 后端聚合数据注入 (供 dashboard.js 初始化图表/轮询) #}
+{# 后端聚合数据注入 (供 dashboard.js ��始化图表/轮询) #}
 <script>
   window.HOME_DATA = {{ (home | tojson) if home else 'null' }};
   window.SYSTEM_STATUS = {{ system_status | tojson }};

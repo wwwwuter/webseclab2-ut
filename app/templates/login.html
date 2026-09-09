@@ -3,26 +3,36 @@
 {% block title %}登录 - WebSecLab{% endblock %}
 
 {% block content %}
-<div class="row justify-content-center">
-    <div class="col-md-5">
-        <div class="card shadow-sm">
-            <div class="card-body p-4">
-                <h3 class="card-title text-center mb-4">
-                    <i class="bi bi-box-arrow-in-right"></i> 用户登录
-                </h3>
+<div class="row justify-content-center align-items-center" style="min-height:70vh;">
+    <div class="col-md-5 col-lg-4">
+        <div class="card shadow-sm border-0 soc-fade-up">
+            <div class="card-body p-4 p-md-5">
+                <div class="text-center mb-4">
+                    <div class="kpi-icon mx-auto mb-3" style="background:linear-gradient(135deg,#3b82f6,#06b6d4);color:#fff;width:56px;height:56px;font-size:1.6rem;">
+                        <i class="bi bi-shield-lock"></i>
+                    </div>
+                    <h4 class="card-title mb-1 fw-bold">欢迎回来</h4>
+                    <p class="text-muted mb-0">登录 WebSecLab 安全运营中心</p>
+                </div>
                 <form method="POST" action="{{ url_for('auth.login') }}">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <div class="mb-3">
                         <label for="username" class="form-label">用户名</label>
-                        <input type="text" class="form-control" id="username" name="username"
-                               placeholder="请输入用户名" required autofocus>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-person"></i></span>
+                            <input type="text" class="form-control" id="username" name="username"
+                                   placeholder="请输入用户名" required autofocus>
+                        </div>
                     </div>
-                    <div class="mb-3">
+                    <div class="mb-4">
                         <label for="password" class="form-label">密码</label>
-                        <input type="password" class="form-control" id="password" name="password"
-                               placeholder="请输入密码" required>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-lock"></i></span>
+                            <input type="password" class="form-control" id="password" name="password"
+                                   placeholder="请输入密码" required>
+                        </div>
                     </div>
-                    <button type="submit" class="btn btn-primary w-100 mb-3">登录</button>
+                    <button type="submit" class="btn btn-primary w-100 mb-3 py-2">登录</button>
                     <div class="text-center">
                         <span class="text-muted">还没有账号？</span>
                         <a href="{{ url_for('auth.register') }}">立即注册</a>

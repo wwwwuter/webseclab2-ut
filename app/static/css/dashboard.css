@@ -11,10 +11,14 @@
 @media (max-width: 991.98px) { .col-lg-2-4 { flex: 0 0 33.3333%; max-width: 33.3333%; } }
 @media (max-width: 767.98px) { .col-lg-2-4 { flex: 0 0 50%; max-width: 50%; } }
 
-.dash-card { border: 1px solid var(--soc-border); border-radius: 12px; }
+.dash-card {
+  border: 1px solid var(--soc-border); border-radius: var(--soc-radius);
+  box-shadow: var(--soc-shadow-sm); transition: var(--soc-transition);
+}
+.dash-card:hover { box-shadow: var(--soc-shadow); }
 .dash-card .card-header {
   font-weight: 600; font-size: .95rem; border-bottom: 1px solid var(--soc-border);
-  background: #f8fafc; border-radius: 12px 12px 0 0;
+  background: #fbfcfe; border-radius: var(--soc-radius) var(--soc-radius) 0 0;
 }
 
 .section-head {
@@ -28,8 +32,10 @@
 /* ---------- 模块① 系统状态卡 ---------- */
 .status-card {
   background: #fff; border: 1px solid var(--soc-border); border-left: 4px solid #cbd5e1;
-  border-radius: 10px; padding: .85rem 1rem; position: relative;
+  border-radius: var(--soc-radius-sm); padding: .85rem 1rem; position: relative;
+  box-shadow: var(--soc-shadow-sm); transition: var(--soc-transition);
 }
+.status-card:hover { box-shadow: var(--soc-shadow); transform: translateY(-2px); }
 .status-card .status-dot {
   position: absolute; top: .9rem; right: .9rem; width: 10px; height: 10px; border-radius: 50%;
   background: #cbd5e1;
@@ -45,13 +51,14 @@
 /* ---------- 模块② 快捷操作 ---------- */
 .quick-btn {
   display: flex; align-items: center; gap: .7rem;
-  background: #fff; border: 1px solid var(--soc-border); border-radius: 10px;
+  background: #fff; border: 1px solid var(--soc-border); border-radius: var(--soc-radius-sm);
   padding: .8rem .9rem; text-decoration: none; color: var(--soc-text);
-  transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+  box-shadow: var(--soc-shadow-sm);
+  transition: var(--soc-transition);
 }
 .quick-btn:hover {
   transform: translateY(-2px); border-color: var(--soc-accent);
-  box-shadow: 0 6px 18px rgba(59,130,246,.12); color: var(--soc-text);
+  box-shadow: var(--soc-shadow); color: var(--soc-text);
 }
 .quick-btn .qi {
   width: 38px; height: 38px; border-radius: 9px; display: flex;
@@ -61,9 +68,11 @@
 
 /* ---------- 模块③ 核心指标 KPI ---------- */
 .kpi-card {
-  background: #fff; border: 1px solid var(--soc-border); border-radius: 12px;
+  background: #fff; border: 1px solid var(--soc-border); border-radius: var(--soc-radius);
   padding: 1rem; text-align: center; height: 100%;
+  box-shadow: var(--soc-shadow-sm); transition: var(--soc-transition);
 }
+.kpi-card:hover { box-shadow: var(--soc-shadow); transform: translateY(-3px); }
 .kpi-card .kpi-ico {
   width: 40px; height: 40px; border-radius: 10px; display: inline-flex;
   align-items: center; justify-content: center; font-size: 1.2rem; margin-bottom: .5rem;
@@ -146,10 +155,19 @@
 /* ---------- 欢迎横幅 (未登录) ---------- */
 .welcome-banner {
   background: linear-gradient(120deg, #1f2937 0%, #111827 100%);
-  color: #f8fafc; border-radius: 14px; padding: 1.6rem 1.8rem;
+  color: #f8fafc; border-radius: var(--soc-radius); padding: 1.8rem 2rem;
+  box-shadow: var(--soc-shadow); position: relative; overflow: hidden;
 }
-.welcome-banner h2 { color: #f8fafc; }
+.welcome-banner::after {
+  content: ''; position: absolute; right: -60px; top: -60px;
+  width: 220px; height: 220px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(59,130,246,.18), transparent 70%);
+}
+.welcome-banner h2 { color: #f8fafc; font-size: 1.7rem; letter-spacing: -.01em; }
 .welcome-banner p { color: #cbd5e1; }
+.welcome-banner .hero-badge {
+  background: rgba(59,130,246,.18); color: #93c5fd;
+}
 .welcome-stat { display: inline-flex; flex-direction: column; align-items: center; margin-left: 1.4rem; }
 .welcome-stat .num { font-size: 1.7rem; font-weight: 800; color: #60a5fa; line-height: 1; }
 .welcome-stat .lbl { font-size: .78rem; color: #9ca3af; }
