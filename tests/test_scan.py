@@ -290,3 +290,123 @@ class TestScanCompletionLifecycle:
         assert data['progress'] == 100
         assert data['open_ports'] == 1
         assert len(data['results']) == 1
+
+
+class TestScanGuardrails:
+    """扫描安全护栏测试: 速率限制、并发上限、目标白名单/黑名单"""
+
+    def _svc(self, app):
+        from app.services.scanner_service import ScannerService
+        return ScannerService()
+
+    def _reset_config(self, app):
+        """重置 SCAN_* 配置为默认值, 避免 session 级 app 夹具的配置在测试间泄漏。"""
+        app.config['SCAN_RATE_LIMIT_MAX'] = 10
+        app.config['SCAN_RATE_LIMIT_WINDOW'] = 3600
+        app.config['SCAN_MAX_CONCURRENT_PER_USER'] = 2
+        app.config['SCAN_MAX_CONCURRENT_GLOBAL'] = 5
+        app.config['SCAN_TARGET_BLACKLIST'] = ''
+        app.config['SCAN_TARGET_WHITELIST'] = ''
+
+    def test_guardrails_pass_by_default(self, app, db, test_user):
+        """默认配置下正常目标可通过护栏校验"""
+        self._reset_config(app)
+        from app.scanner.guardrails import ScanGuardrails
+        with app.app_context():
+            g = ScanGuardrails(app.config)
+            ok, error = g.check_all(test_user.id, '127.0.0.1')
+            assert ok
+            assert error is None
+
+    def test_rate_limit_exceeded(self, app, db, test_user):
+        """超过速率限制后创建任务被拒绝"""
+        self._reset_config(app)
+        app.config['SCAN_RATE_LIMIT_MAX'] = 2
+        app.config['SCAN_RATE_LIMIT_WINDOW'] = 3600
+        svc = self._svc(app)
+        with app.app_context():
+            # 前 2 个任务正常创建
+            assert svc.create_task(test_user.id, '127.0.0.1')[1] is None
+            assert svc.create_task(test_user.id, '127.0.0.1')[1] is None
+            # 第 3 个触发速率限制
+            task, error = svc.create_task(test_user.id, '127.0.0.1')
+            assert task is None
+            assert '频率超限' in error
+
+    def test_rate_limit_disabled_when_zero(self, app, db, test_user):
+        """SCAN_RATE_LIMIT_MAX=0 时禁用速率限制"""
+        self._reset_config(app)
+        app.config['SCAN_RATE_LIMIT_MAX'] = 0
+        svc = self._svc(app)
+        with app.app_context():
+            for _ in range(5):
+                task, error = svc.create_task(test_user.id, '127.0.0.1')
+                assert error is None
+                assert task is not None
+
+    def test_concurrency_per_user_exceeded(self, app, db, test_user):
+        """用户并发运行任务数超限被拒绝"""
+        self._reset_config(app)
+        app.config['SCAN_MAX_CONCURRENT_PER_USER'] = 1
+        app.config['SCAN_MAX_CONCURRENT_GLOBAL'] = 0
+        svc = self._svc(app)
+        with app.app_context():
+            # 创建 1 个任务并置为 running
+            task, _ = svc.create_task(test_user.id, '127.0.0.1')
+            task.status = ScanTask.STATUS_RUNNING
+            db.session.commit()
+            # 再创建触发并发限制
+            new_task, error = svc.create_task(test_user.id, '127.0.0.1')
+            assert new_task is None
+            assert '并发扫描超限' in error
+
+    def test_concurrency_global_exceeded(self, app, db, test_user, admin_user):
+        """全局并发运行任务数超限被拒绝"""
+        self._reset_config(app)
+        app.config['SCAN_MAX_CONCURRENT_PER_USER'] = 0
+        app.config['SCAN_MAX_CONCURRENT_GLOBAL'] = 1
+        svc = self._svc(app)
+        with app.app_context():
+            # 其他用户占满全局并发
+            other_task, _ = svc.create_task(admin_user.id, '127.0.0.1')
+            other_task.status = ScanTask.STATUS_RUNNING
+            db.session.commit()
+            # 当前用户创建触发全局限制
+            new_task, error = svc.create_task(test_user.id, '127.0.0.1')
+            assert new_task is None
+            assert '系统并发扫描已满' in error
+
+    def test_target_blacklist(self, app, db, test_user):
+        """命中黑名单的目标被拦截"""
+        self._reset_config(app)
+        app.config['SCAN_TARGET_BLACKLIST'] = '10.0.0.0/8'
+        svc = self._svc(app)
+        with app.app_context():
+            task, error = svc.create_task(test_user.id, '10.1.2.3')
+            assert task is None
+            assert '黑名单' in error
+
+    def test_target_whitelist(self, app, db, test_user):
+        """启用白名单后, 白名单外目标被拦截, 白名单内目标放行"""
+        self._reset_config(app)
+        app.config['SCAN_TARGET_WHITELIST'] = '192.168.1.0/24'
+        svc = self._svc(app)
+        with app.app_context():
+            # 白名单外
+            task, error = svc.create_task(test_user.id, '10.0.0.1')
+            assert task is None
+            assert '白名单' in error
+            # 白名单内
+            task2, error2 = svc.create_task(test_user.id, '192.168.1.5')
+            assert error2 is None
+            assert task2 is not None
+
+    def test_whitelist_disabled_when_empty(self, app, db, test_user):
+        """白名单为空时不启用白名单限制"""
+        self._reset_config(app)
+        app.config['SCAN_TARGET_WHITELIST'] = ''
+        svc = self._svc(app)
+        with app.app_context():
+            task, error = svc.create_task(test_user.id, '10.0.0.1')
+            assert error is None
+            assert task is not None

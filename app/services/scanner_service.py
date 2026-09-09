@@ -17,6 +17,7 @@ from app.extensions import db
 from app.models.scan import ScanTask, ScanResult
 from app.scanner.socket_scanner import SocketScanner
 from app.scanner.port import get_port_list
+from app.scanner.guardrails import ScanGuardrails
 from app.services.nmap_service import NmapScanner
 
 logger = logging.getLogger(__name__)
@@ -136,6 +137,12 @@ class ScannerService:
             return None, (
                 '扫描目标指向云元数据地址 (169.254.0.0/16), 已被安全策略拦截。'
             )
+
+        # 扫描安全护栏: 速率限制、并发上限、目标白名单/黑名单
+        guardrails = ScanGuardrails(current_app.config)
+        ok, guardrail_error = guardrails.check_all(user_id, target)
+        if not ok:
+            return None, guardrail_error
 
         if scan_type not in ['socket', 'nmap', 'both']:
             return None, '无效的扫描类型'

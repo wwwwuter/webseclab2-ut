@@ -65,6 +65,20 @@ class BaseConfig:
     # Hook 上报时间戳允许的最大偏差 (秒), 用于防重放
     DVWA_HOOK_TIMESTAMP_TOLERANCE = int(os.environ.get('DVWA_HOOK_TIMESTAMP_TOLERANCE', '300'))
 
+    # ==================== 扫描安全护栏 ====================
+    # 速率限制: 窗口内每用户最多创建的任务数; 0 表示禁用
+    SCAN_RATE_LIMIT_MAX = int(os.environ.get('SCAN_RATE_LIMIT_MAX', '10'))
+    # 速率限制窗口 (秒)
+    SCAN_RATE_LIMIT_WINDOW = int(os.environ.get('SCAN_RATE_LIMIT_WINDOW', '3600'))
+    # 并发上限: 每用户同时运行的任务数; 0 表示禁用
+    SCAN_MAX_CONCURRENT_PER_USER = int(os.environ.get('SCAN_MAX_CONCURRENT_PER_USER', '2'))
+    # 并发上限: 全局同时运行的任务数; 0 表示禁用
+    SCAN_MAX_CONCURRENT_GLOBAL = int(os.environ.get('SCAN_MAX_CONCURRENT_GLOBAL', '5'))
+    # 目标黑名单: 逗号分隔的 CIDR/主机/IP, 命中即拦截 (云元数据地址在 scanner_service 中始终拦截)
+    SCAN_TARGET_BLACKLIST = os.environ.get('SCAN_TARGET_BLACKLIST', '')
+    # 目标白名单: 逗号分隔的 CIDR/主机/IP; 为空表示不启用白名单限制
+    SCAN_TARGET_WHITELIST = os.environ.get('SCAN_TARGET_WHITELIST', '')
+
 
 class DevelopmentConfig(BaseConfig):
     """开发环境配置"""
