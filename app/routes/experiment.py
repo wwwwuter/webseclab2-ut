@@ -119,6 +119,9 @@ def exp_detail(experiment_id):
     logs = ExperimentService.get_experiment_logs(experiment_id)
     dvwa_url, _ = ExperimentService.get_dvwa_url(experiment_id, current_user.id)
 
+    # DVWA Hook 自动验证事件
+    events = ExperimentService.get_experiment_events(experiment_id)
+
     # 关联 AI 报告 (通过 Report.experiment 反向引用)
     from app.models.report import Report
     reports = experiment.reports.order_by(Report.created_time.desc()).all()
@@ -145,6 +148,7 @@ def exp_detail(experiment_id):
                            logs=logs,
                            dvwa_url=dvwa_url,
                            reports=reports,
+                           events=events,
                            duration_text=duration_text,
                            back_url=back_url)
 
@@ -197,7 +201,7 @@ def exp_complete(experiment_id):
 def exp_dvwa_status(experiment_id):
     """
     异步探测实验目标地址连通性 (供实验详情页 JS 调用, 避免阻塞页面渲染)
-    仅探测服务端已保存的目标地址, 不接受任意 URL 参数
+    仅探测服务端已保存的目标地址, 不接受任�� URL 参数
     """
     status, error = ExperimentService.get_dvwa_status(experiment_id, current_user.id)
     if error:
@@ -277,9 +281,10 @@ def admin_exp_detail(experiment_id):
         return redirect(url_for('exp.admin_exp_list'))
     logs = ExperimentService.get_experiment_logs(experiment_id)
     dvwa_url, _ = ExperimentService.get_dvwa_url(experiment_id, user_id=None)
+    events = ExperimentService.get_experiment_events(experiment_id)
     return render_template('experiment/detail.html',
                            experiment=experiment, logs=logs, dvwa_url=dvwa_url,
-                           admin_view=True)
+                           events=events, admin_view=True)
 
 
 @exp_bp.route('/admin/experiment/<int:experiment_id>/delete', methods=['POST'])

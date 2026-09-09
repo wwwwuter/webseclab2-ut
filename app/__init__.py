@@ -46,6 +46,7 @@ def create_app(config_name=None):
     from app.routes.mcp import mcp_bp
     from app.routes.knowledge_graph import kg_bp
     from app.routes.profile import profile_bp
+    from app.routes.dvwa import dvwa_bp
     app.register_blueprint(auth_bp)
     app.register_blueprint(main_bp)
     app.register_blueprint(vuln_bp)
@@ -58,6 +59,7 @@ def create_app(config_name=None):
     app.register_blueprint(mcp_bp)
     app.register_blueprint(kg_bp)
     app.register_blueprint(profile_bp)
+    app.register_blueprint(dvwa_bp)
 
     # 注册自定义 Jinja 过滤器 (轻量文本渲染: 换行 + 行内/围栏代码块)
     _register_filters(app)

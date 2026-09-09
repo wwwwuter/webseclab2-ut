@@ -4,6 +4,7 @@ from app.models.user import User
 from app.models.login_log import LoginLog
 from app.models.vulnerability import VulnerabilityCategory, OWASPCategory, Vulnerability
 from app.models.experiment import Experiment, ExperimentLog
+from app.models.experiment_event import ExperimentEvent
 from app.models.scan import ScanTask, ScanResult
 from app.models.ai_analysis import AIAnalysis
 from app.models.report import Report

@@ -58,6 +58,13 @@ class BaseConfig:
     # 系统状态探测结果缓存秒数; 设为 0 关闭缓存 (测试环境使用)
     SYSTEM_STATUS_TTL = int(os.environ.get('SYSTEM_STATUS_TTL', '30'))
 
+    # ==================== DVWA Hook 自动验证 ====================
+    # 共享密钥: DVWA Hook 用其对上报 payload 做 HMAC-SHA256 签名, 平台校验签名防伪造。
+    # 生产环境务必通过环境变量 DVWA_HOOK_SECRET 提供固定的强随机值。
+    DVWA_HOOK_SECRET = os.environ.get('DVWA_HOOK_SECRET', '')
+    # Hook 上报时间戳允许的最大偏差 (秒), 用于防重放
+    DVWA_HOOK_TIMESTAMP_TOLERANCE = int(os.environ.get('DVWA_HOOK_TIMESTAMP_TOLERANCE', '300'))
+
 
 class DevelopmentConfig(BaseConfig):
     """开发环境配置"""

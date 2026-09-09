@@ -4,12 +4,15 @@
 所有状态变更必须通过Service层，禁止直接修改数据库字段
 """
 
+import hashlib
+import json
 from datetime import datetime, timedelta
 from sqlalchemy import case, update
 from flask import current_app
 
 from app.extensions import db
 from app.models.experiment import Experiment, ExperimentLog
+from app.models.experiment_event import ExperimentEvent
 from app.models.vulnerability import Vulnerability
 from app.models.user import User
 from app.utils.token import generate_experiment_token
@@ -334,6 +337,100 @@ class ExperimentService:
             return None, '操作未保存，请刷新详情后重试'
         return db.session.get(Experiment, experiment_id), None
 
+    # ==================== DVWA Hook 自动验证 ====================
+
+    @staticmethod
+    def record_hook_event(experiment_token, event_type, payload=None, timestamp=None):
+        """
+        记录 DVWA Hook 上报的事件, 并在命中关键事件时自动判定实验成功。
+
+        自动判定规则 (按漏洞类型配置关键事件):
+        - 实验关联漏洞所属分类的关键事件类型 == 上报事件类型 时, 自动判定成功
+        - 仅当实验处于 running 状态时自动判定 (created 状态需先启动)
+        - 自动验证优先, 人工提交成功仍作为兜底 (complete_experiment 保留)
+
+        :param experiment_token: 实验Token
+        :param event_type: 事件类型 (如 sqli_success)
+        :param payload: 事件负载 (dict, 可空)
+        :param timestamp: 上报时间戳 (用于去重指纹, 可空)
+        :return: (ExperimentEvent对象, 错误信息)
+        """
+        if not experiment_token or not event_type:
+            return None, '缺少实验Token或事件类型'
+
+        experiment = Experiment.query.filter_by(token=experiment_token).first()
+        if not experiment:
+            return None, '实验不存在'
+
+        # 生成去重指纹: 同一实验同一事件类型同一负载只记录一次
+        payload_str = json.dumps(payload, sort_keys=True, ensure_ascii=False) if payload else ''
+        fingerprint_src = f'{experiment.id}:{event_type}:{payload_str}'
+        fingerprint = hashlib.sha256(fingerprint_src.encode('utf-8')).hexdigest()
+
+        # 去重: 已存在相同指纹则直接返回 (幂等)
+        existing = ExperimentEvent.query.filter_by(fingerprint=fingerprint).first()
+        if existing:
+            return existing, None
+
+        # 判断是否命中关键事件 (按漏洞分类映射)
+        key_event = None
+        if experiment.vulnerability and experiment.vulnerability.category:
+            key_event = DVWAService.get_key_event_for_category(
+                experiment.vulnerability.category.name
+            )
+
+        triggered = (key_event is not None and key_event == event_type)
+
+        event = ExperimentEvent(
+            experiment_id=experiment.id,
+            event_type=event_type,
+            payload=payload_str,
+            fingerprint=fingerprint,
+            triggered_success=triggered,
+            event_time=datetime.fromtimestamp(timestamp) if timestamp else datetime.now(),
+        )
+
+        try:
+            db.session.add(event)
+            db.session.flush()
+
+            # 命中关键事件且实验处于 running 状态 -> 自动判定成功
+            if triggered and experiment.status == Experiment.STATUS_RUNNING:
+                ExperimentService._transition(
+                    experiment, experiment.user_id, 'complete',
+                    {'status': Experiment.STATUS_SUCCESS,
+                     'result': f'DVWA Hook 自动验证成功 (事件: {event_type})',
+                     'completed_time': datetime.now()},
+                    f'DVWA Hook 自动验证成功 (事件: {event_type})'
+                )
+            else:
+                # 未命中关键事件或实验未运行, 仅记录事件日志
+                ExperimentService._add_log(
+                    experiment.id, 'hook_event',
+                    f'收到 Hook 事件: {event_type}'
+                    + (' (命中关键事件)' if triggered else ' (非关键事件)')
+                )
+
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            current_app.logger.exception('Hook事件记录事务失败 [exp=%s, event=%s]',
+                                         experiment.id, event_type)
+            return None, '事件未保存，请稍后重试'
+
+        return db.session.get(ExperimentEvent, event.id), None
+
+    @staticmethod
+    def get_experiment_events(experiment_id):
+        """
+        获取实验的 Hook 事件列表
+        :param experiment_id: 实验ID
+        :return: ExperimentEvent列表 (按时间倒序)
+        """
+        return ExperimentEvent.query.filter_by(
+            experiment_id=experiment_id
+        ).order_by(ExperimentEvent.event_time.desc(), ExperimentEvent.id.desc()).all()
+
     # ==================== 实验删除 ====================
 
     @staticmethod
@@ -390,7 +487,7 @@ class ExperimentService:
     @staticmethod
     def get_dvwa_url(experiment_id, user_id):
         """
-        获取实验的DVWA访问URL
+        获���实验的DVWA访问URL
         :param experiment_id: 实验ID
         :param user_id: 用户ID
         :return: (URL字符串, 错误信息)
