@@ -1,13 +1,15 @@
 """
 MCP 管理器模块
-按固定顺序编排 AI 安全分析工具链，并将结果聚合为分析报告。
+编排 AI 安全分析工具链，并将结果聚合为分析报告。
 
 说明:
-  本模块不实现 LLM 规划器。execute_analysis_plan 按预设顺序
-  (Scanner → Knowledge → Risk → Dashboard) 依次调用工具并聚合结果。
+  本模块优先使用 LLM 动态规划器 (ReAct 循环) 根据用户意图动态选择工具;
+  当 LLM 不可用或规划失败时, 自动回退到固定预设顺序
+  (Scanner → Knowledge → Risk → Dashboard) 保证功能可用。
 
 核心流程:
-  用户请求 → 按预设工具链依次执行 (ToolExecutor)
+  用户请求 → LLM 动态规划 (ReAct) → 按规划执行工具
+           → (失败时) 回退固定工具链
            → 结果聚合为分析报告
            → 返回给用户
 """
@@ -28,6 +30,15 @@ class MCPManager:
     def __init__(self):
         self.registry = register_all_tools()
         self.executor = ToolExecutor(self.registry)
+        self._planner = None
+
+    @property
+    def planner(self):
+        """惰性初始化 LLM 规划器 (避免循环导入)"""
+        if self._planner is None:
+            from app.services.mcp.llm_planner import LLMPlanner
+            self._planner = LLMPlanner(self.registry, self.executor)
+        return self._planner
 
     def get_available_tools(self) -> List[dict]:
         """获取所有可用工具的 schema"""
@@ -43,18 +54,45 @@ class MCPManager:
         """
         执行完整的安全分析计划
 
-        按固定预设顺序编排工具链 (非 LLM 动态规划):
-        1. Scanner / NmapTool → 获取端口信息
-        2. KnowledgeTool → 查询漏洞知识库
-        3. RiskTool → 计算风险评估
-        4. DashboardTool → 获取统计数据
-        5. ReportTool → 生成分析摘要
+        优先使用 LLM 动态规划 (ReAct 循环) 根据用户意图选择工具;
+        当 LLM 不可用或规划失败时, 自动回退到固定预设顺序工具链。
 
         :param user_id: 用户ID
         :param target: 扫描目标 (IP/域名)
         :param experiment_id: 实验ID (可选)
         :param scan_id: 扫描任务ID (可选)
         :return: 综合分析结果
+        """
+        # Step 1: 尝试 LLM 动态规划
+        tool_calls, results, final_answer, planning_error = self.planner.plan(
+            user_id=user_id,
+            target=target,
+            experiment_id=experiment_id,
+            scan_id=scan_id,
+        )
+
+        if planning_error is None:
+            return self._build_plan_result(
+                tool_calls, results, final_answer,
+                planner='react',
+            )
+
+        # Step 2: 回退固定工具链
+        logger.warning('LLM 规划失败, 回退固定工具链: %s', planning_error)
+        return self._execute_fixed_chain(
+            user_id, target, experiment_id, scan_id,
+            planning_error=planning_error,
+        )
+
+    def _execute_fixed_chain(self, user_id: int, target: str,
+                             experiment_id: int, scan_id: int,
+                             planning_error: str = None) -> Dict[str, Any]:
+        """
+        固定预设顺序工具链 (回退方案):
+        1. Scanner → 获取端口信息
+        2. Knowledge → 查询漏洞知识库
+        3. Risk → 计算风险评估
+        4. Dashboard → 获取统计数据
         """
         results = {}
         tool_chain = []
@@ -97,9 +135,41 @@ class MCPManager:
 
         return {
             'success': True,
+            'planner': 'fallback',
+            'planning_error': planning_error,
             'tools_executed': tool_chain,
             'results': {k: v.to_dict() for k, v in results.items()},
             'summary': summary,
+            'final_answer': None,
+            'execution_log': self.executor.execution_log,
+        }
+
+    def _build_plan_result(self, tool_calls: List[Dict[str, Any]],
+                           results: List[ToolResult],
+                           final_answer: str,
+                           planner: str) -> Dict[str, Any]:
+        """构建 LLM 规划的执行结果 (处理可能的重复工具名)"""
+        tool_chain = [call['tool'] for call in tool_calls]
+
+        # 用唯一 key 构建 results 字典 (同名工具多次调用时加序号)
+        results_dict: Dict[str, ToolResult] = {}
+        for i, result in enumerate(results):
+            name = tool_chain[i]
+            key = name if name not in results_dict else f'{name}_{i}'
+            results_dict[key] = result
+
+        summary = self._aggregate_results(results_dict, list(results_dict.keys()))
+        if final_answer:
+            summary += f'\n\n## AI 规划总结\n{final_answer}'
+
+        return {
+            'success': True,
+            'planner': planner,
+            'planning_error': None,
+            'tools_executed': tool_chain,
+            'results': {k: v.to_dict() for k, v in results_dict.items()},
+            'summary': summary,
+            'final_answer': final_answer,
             'execution_log': self.executor.execution_log,
         }
 

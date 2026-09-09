@@ -184,6 +184,15 @@
                 {% endif %}
             </div>
             <div class="text-end">
+                {% if plan.planner == 'react' %}
+                <span class="badge" style="background:#7c3aed;font-size:.72rem;" title="由 LLM 根据用户意图动态规划工具调用">
+                    <i class="bi bi-stars"></i> AI 动态规划
+                </span>
+                {% elif plan.planner == 'fallback' %}
+                <span class="badge bg-secondary" style="font-size:.72rem;" title="LLM 规划不可用，已回退固定工具链{% if plan.planning_error %}：{{ plan.planning_error }}{% endif %}">
+                    <i class="bi bi-arrow-repeat"></i> 固定链回退
+                </span>
+                {% endif %}
                 <span class="badge bg-success bg-opacity-75" style="font-size:.78rem;">
                     <i class="bi bi-check-circle"></i> 完成
                 </span>
@@ -659,7 +668,7 @@ app.get('/api/user', async (req, res) => {
                 </div>
                 <!-- PHP PDO -->
                 <div class="tab-pane fade" id="fix-4">
-                    <div class="ai-fix-code"><pre><code class="language-php">// PHP — 使用 PDO 预处理语句
+                    <div class="ai-fix-code"><pre><code class="language-php">// PHP — 使用 PDO 预处理��句
 &lt;?php
 $pdo = new PDO('mysql:host=localhost;dbname=app', 'user', 'pass');
 $id = $_GET['id'];

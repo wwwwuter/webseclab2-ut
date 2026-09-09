@@ -18,5 +18,6 @@ from app.services.mcp.base_tool import Tool, ToolResult
 from app.services.mcp.tool_registry import ToolRegistry
 from app.services.mcp.tool_executor import ToolExecutor
 from app.services.mcp.mcp_manager import MCPManager
+from app.services.mcp.llm_planner import LLMPlanner
 
-__all__ = ['Tool', 'ToolResult', 'ToolRegistry', 'ToolExecutor', 'MCPManager']
+__all__ = ['Tool', 'ToolResult', 'ToolRegistry', 'ToolExecutor', 'MCPManager', 'LLMPlanner']
