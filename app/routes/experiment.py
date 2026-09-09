@@ -4,7 +4,7 @@
 所有用户端接口强制用户隔离(user_id验证)，防止IDOR漏洞
 """
 
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, current_app
 from flask_login import login_required, current_user
 from app.utils.permission import admin_required
 from app.services.experiment_service import ExperimentService
@@ -94,10 +94,12 @@ def exp_create():
         vulns_by_cat.append({'category': None, 'items': uncategorized})
 
     prefill_vuln_id = request.args.get('vulnerability_id', type=int)
+    dvwa_base_url = current_app.config.get('DVWA_BASE_URL', '')
     return render_template('experiment/create.html',
                            vulns_by_cat=vulns_by_cat,
                            categories=categories,
-                           prefill_vuln_id=prefill_vuln_id)
+                           prefill_vuln_id=prefill_vuln_id,
+                           dvwa_base_url=dvwa_base_url)
 
 
 @exp_bp.route('/experiment/<int:experiment_id>')
@@ -188,6 +190,19 @@ def exp_complete(experiment_id):
             return redirect(url_for('exp.exp_detail', experiment_id=experiment_id))
 
     return render_template('experiment/result.html', experiment=experiment)
+
+
+@exp_bp.route('/experiment/<int:experiment_id>/dvwa-status')
+@login_required
+def exp_dvwa_status(experiment_id):
+    """
+    异步探测实验目标地址连通性 (供实验详情页 JS 调用, 避免阻塞页面渲染)
+    仅探测服务端已保存的目标地址, 不接受任意 URL 参数
+    """
+    status, error = ExperimentService.get_dvwa_status(experiment_id, current_user.id)
+    if error:
+        return jsonify({'state': 'unconfigured', 'detail': error}), 404
+    return jsonify(status)
 
 
 @exp_bp.route('/experiment/<int:experiment_id>/close', methods=['POST'])

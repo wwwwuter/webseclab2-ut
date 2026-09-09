@@ -280,8 +280,8 @@ class ExperimentService:
             return None, '无效的实验完成状态'
 
         result_text = result_text.strip() if isinstance(result_text, str) else ''
-        if not result_text:
-            return None, '请填写实验结果描述，不能只包含空白字符'
+        if len(result_text) < 10:
+            return None, '实验结果描述至少需要 10 个字符，请具体描述复现步骤和结果'
         if len(result_text) > Experiment.RESULT_MAX_LENGTH:
             return None, '实验结果不能超过 20000 个字符'
 
@@ -403,6 +403,19 @@ class ExperimentService:
             experiment.target, experiment.token, experiment.dvwa_level
         )
         return url, None
+
+    @staticmethod
+    def get_dvwa_status(experiment_id, user_id):
+        """
+        探测实验目标地址的连通性 (仅探测服务端已保存的地址, 带用户隔离验证)
+        :param experiment_id: 实验ID
+        :param user_id: 当前用户ID (None表示管理员不验证)
+        :return: ({'state','detail'}, 错误信息)
+        """
+        experiment, error = ExperimentService.get_experiment_by_id(experiment_id, user_id)
+        if error:
+            return None, error
+        return DVWAService.check_target_connectivity(experiment.target), None
 
     # ==================== 日志管理 ====================
 

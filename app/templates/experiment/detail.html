@@ -65,6 +65,11 @@
                     <strong>DVWA访问链接：</strong>
                     <a href="{{ dvwa_url }}" target="_blank" class="text-break">{{ dvwa_url }}</a>
                 </li>
+                <li class="list-group-item">
+                    <strong>靶机连通性：</strong>
+                    <span id="dvwa-status-badge" class="badge bg-secondary">检测中…</span>
+                    <div id="dvwa-status-detail" class="small text-muted mt-1">正在探测目标地址…</div>
+                </li>
                 {% endif %}
                 <li class="list-group-item">
                     <strong>创建时间：</strong>{{ experiment.created_time.strftime('%Y-%m-%d %H:%M:%S') }}
@@ -227,5 +232,37 @@
         try { document.execCommand('copy'); } catch (e) {}
         document.body.removeChild(ta);
     }
+
+    // 异步探测靶机连通性: 与实验记录状态(上方徽章)分离展示，
+    // 仅表示"目标地址是否有 HTTP 服务响应"，不代表实验已完成。
+    (function () {
+        var badge = document.getElementById('dvwa-status-badge');
+        var detail = document.getElementById('dvwa-status-detail');
+        if (!badge) return;
+
+        var stateMap = {
+            reachable: {cls: 'bg-success', text: '可访问'},
+            http_error: {cls: 'bg-warning text-dark', text: '服务异常'},
+            unreachable: {cls: 'bg-danger', text: '无法连接'},
+            unconfigured: {cls: 'bg-secondary', text: '未配置'}
+        };
+
+        fetch('{{ url_for("exp.exp_dvwa_status", experiment_id=experiment.id) }}')
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                var s = stateMap[data.state] || stateMap.unconfigured;
+                badge.className = 'badge ' + s.cls;
+                badge.textContent = s.text;
+                detail.textContent = data.detail || '';
+                if (data.state === 'unreachable' || data.state === 'http_error') {
+                    detail.textContent += '（本平台仅从服务器发起探测，无法访问你本机的私有网络虚拟机）';
+                }
+            })
+            .catch(function () {
+                badge.className = 'badge bg-secondary';
+                badge.textContent = '探测失败';
+                detail.textContent = '未能完成连通性探测，请手动检查目标地址';
+            });
+    })();
 </script>
 {% endblock %}
