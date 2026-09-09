@@ -1,9 +1,13 @@
 """
 RBAC 权限模型模块
-实现企业级基于角色的访问控制 (Role-Based Access Control)
+实现基于角色的访问控制 (Role-Based Access Control)
+
+平台定位为学生使用, 仅保留两个角色:
+- Admin: 管理员, 拥有全部权限
+- User: 普通用户(学生), 可进行实验/扫描/AI分析等常规操作
 
 表结构:
-- Role: 角色表 (Admin, Teacher, Student, Auditor, Researcher)
+- Role: 角色表 (Admin, User)
 - Permission: 权限表 (细粒度操作权限)
 - RolePermission: 角色-权限关联表 (多对多)
 - UserRole: 用户-角色关联表 (多对多)
@@ -46,7 +50,7 @@ class Role(db.Model):
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
 
-    # 角色唯一标识 (admin / teacher / student / auditor / researcher)
+    # 角色唯一标识 (admin / user)
     code = db.Column(db.String(32), unique=True, nullable=False, index=True)
 
     # 角色显示名称
@@ -77,10 +81,7 @@ class Role(db.Model):
 
     # 角色常量
     CODE_ADMIN = 'admin'
-    CODE_TEACHER = 'teacher'
-    CODE_STUDENT = 'student'
-    CODE_AUDITOR = 'auditor'
-    CODE_RESEARCHER = 'researcher'
+    CODE_USER = 'user'
 
     def __repr__(self):
         return f'<Role {self.code}: {self.name}>'

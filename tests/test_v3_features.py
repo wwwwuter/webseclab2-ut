@@ -233,19 +233,14 @@ class TestRBAC:
     """RBAC 角色权限模型测试"""
 
     def test_roles_seeded(self, app, db, seed_data):
-        """角色种子数据验证"""
+        """角色种子数据验证: 仅保留 admin / user 两个角色"""
         from app.models.rbac import Role
         with app.app_context():
             admin = Role.query.filter_by(code='admin').first()
-            student = Role.query.filter_by(code='student').first()
-            teacher = Role.query.filter_by(code='teacher').first()
-            auditor = Role.query.filter_by(code='auditor').first()
-            researcher = Role.query.filter_by(code='researcher').first()
+            user = Role.query.filter_by(code='user').first()
             assert admin is not None
-            assert student is not None
-            assert teacher is not None
-            assert auditor is not None
-            assert researcher is not None
+            assert user is not None
+            assert Role.query.count() == 2
 
     def test_admin_has_all_permissions(self, app, db, seed_data):
         """管理员角色拥有所有权限"""
@@ -257,27 +252,16 @@ class TestRBAC:
             assert admin.has_permission('user:manage')
             assert admin.has_permission('vulnerability:manage')
 
-    def test_student_limited_permissions(self, app, db, seed_data):
-        """学生角色权限受限"""
+    def test_user_limited_permissions(self, app, db, seed_data):
+        """普通用户角色权限受限"""
         from app.models.rbac import Role
         with app.app_context():
-            student = Role.query.filter_by(code='student').first()
-            assert student is not None
-            assert student.has_permission('experiment:create')
-            assert student.has_permission('scan:start')
-            assert not student.has_permission('user:manage')
-            assert not student.has_permission('vulnerability:manage')
-
-    def test_auditor_readonly(self, app, db, seed_data):
-        """审计员角色仅有只读权限"""
-        from app.models.rbac import Role
-        with app.app_context():
-            auditor = Role.query.filter_by(code='auditor').first()
-            assert auditor is not None
-            assert auditor.has_permission('experiment:view')
-            assert auditor.has_permission('audit:view')
-            assert not auditor.has_permission('experiment:create')
-            assert not auditor.has_permission('scan:start')
+            user = Role.query.filter_by(code='user').first()
+            assert user is not None
+            assert user.has_permission('experiment:create')
+            assert user.has_permission('scan:start')
+            assert not user.has_permission('user:manage')
+            assert not user.has_permission('vulnerability:manage')
 
     def test_permission_required_decorator(self, app, db):
         """@permission_required 装饰器函数"""

@@ -379,30 +379,16 @@ def _seed_rbac():
             _db.session.commit()
 
         # ===== 定义角色及其权限 =====
+        # 平台定位为学生使用, 仅保留 admin(管理员) / user(普通用户/学生) 两个角色
         roles_def = {
             'admin': {
                 'name': '管理员',
                 'description': '拥有所有权限, 管理平台全部功能',
                 'permissions': [p[0] for p in permissions_def],  # 所有权限
             },
-            'teacher': {
-                'name': '教师',
-                'description': '管理课程实验、查看学生数据、管理漏洞知识库',
-                'permissions': [
-                    'experiment:create', 'experiment:view', 'experiment:manage',
-                    'scan:start', 'scan:view',
-                    'vulnerability:view', 'vulnerability:manage',
-                    'ai:analyze', 'ai:view',
-                    'report:view', 'report:generate',
-                    'risk:assess', 'risk:view',
-                    'prompt:view', 'prompt:edit',
-                    'knowledge:view', 'knowledge:manage',
-                    'dashboard:view',
-                ],
-            },
-            'student': {
-                'name': '学生',
-                'description': '进行实验、扫描、查看自己的数据和报告',
+            'user': {
+                'name': '普通用户',
+                'description': '进行实验、扫描、AI分析, 查看自己的数据和报告',
                 'permissions': [
                     'experiment:create', 'experiment:view',
                     'scan:start', 'scan:view',
@@ -411,37 +397,6 @@ def _seed_rbac():
                     'report:view', 'report:generate',
                     'risk:assess', 'risk:view',
                     'knowledge:view',
-                    'dashboard:view',
-                ],
-            },
-            'auditor': {
-                'name': '审计员',
-                'description': '查看日志、报告和风险评估记录',
-                'permissions': [
-                    'experiment:view',
-                    'scan:view',
-                    'vulnerability:view',
-                    'ai:view',
-                    'report:view',
-                    'risk:view',
-                    'prompt:view',
-                    'knowledge:view',
-                    'dashboard:view',
-                    'audit:view',
-                ],
-            },
-            'researcher': {
-                'name': '研究员',
-                'description': '高级扫描、AI实验、Prompt管理和知识图谱',
-                'permissions': [
-                    'experiment:create', 'experiment:view',
-                    'scan:start', 'scan:view',
-                    'vulnerability:view', 'vulnerability:manage',
-                    'ai:analyze', 'ai:view',
-                    'report:view', 'report:generate',
-                    'risk:assess', 'risk:view',
-                    'prompt:view', 'prompt:edit',
-                    'knowledge:view', 'knowledge:manage',
                     'dashboard:view',
                 ],
             },
