@@ -302,3 +302,69 @@ class TestAICustomUpgrade:
         out = svc.retrieve_general_context('SELECT 注入测试')
         assert isinstance(out, str)
 
+
+class TestStructuredOutput:
+    """AIService 结构化输出 (chat_structured) 测试"""
+
+    def test_uses_chat_structured_first(self, app, db):
+        """优先使用 chat_structured 获取解析结果"""
+        from app.services.ai_service import AIService
+        svc = AIService()
+
+        class FakeLLM:
+            def chat_structured(self, prompt, schema=None, model=None):
+                return {'risk_level': 'High', 'vulnerability_analysis': 'SQLi'}, None
+            def chat(self, prompt, model=None):
+                return '{"risk_level": "Low"}', None
+
+        svc.llm = FakeLLM()
+        parsed, raw, err = svc._chat_structured_or_fallback('prompt', 'model')
+        assert err is None
+        assert parsed['risk_level'] == 'High'
+        assert 'SQLi' in raw  # raw 为 JSON 序列化文本
+
+    def test_fallback_to_chat_when_structured_fails(self, app, db):
+        """chat_structured 失败时降级到 chat + 正则解析"""
+        from app.services.ai_service import AIService
+        svc = AIService()
+
+        class FakeLLM:
+            def chat_structured(self, prompt, schema=None, model=None):
+                return None, '结构化输出失败'
+            def chat(self, prompt, model=None):
+                return '```json\n{"risk_level": "Medium", "impact": "数据泄露"}\n```', None
+
+        svc.llm = FakeLLM()
+        parsed, raw, err = svc._chat_structured_or_fallback('prompt', 'model')
+        assert err is None
+        assert parsed['risk_level'] == 'Medium'
+        assert '数据泄露' in raw
+
+    def test_returns_error_when_chat_fails(self, app, db):
+        """chat 也失败时返回错误"""
+        from app.services.ai_service import AIService
+        svc = AIService()
+
+        class FakeLLM:
+            def chat_structured(self, prompt, schema=None, model=None):
+                return None, '结构化输出失败'
+            def chat(self, prompt, model=None):
+                return '', '模型推理超时'
+
+        svc.llm = FakeLLM()
+        parsed, raw, err = svc._chat_structured_or_fallback('prompt', 'model')
+        assert err is not None
+        assert '模型推理超时' in err
+        assert parsed is None
+
+    def test_analysis_schema_has_required_fields(self, app, db):
+        """ANALYSIS_SCHEMA 必须包含六字段且全部必填"""
+        from app.services.ai_service import AIService
+        schema = AIService.ANALYSIS_SCHEMA
+        assert schema['type'] == 'object'
+        assert set(schema['required']) == {
+            'risk_level', 'vulnerability_analysis', 'possible_attack',
+            'impact', 'fix_solution', 'security_advice',
+        }
+        assert schema['properties']['risk_level']['enum'] == ['Critical', 'High', 'Medium', 'Low']
+

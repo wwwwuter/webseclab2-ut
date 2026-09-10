@@ -149,6 +149,88 @@ class OpenAICompatibleService:
         except Exception as e:
             return '', f'API 调用异常: {str(e)}'
 
+    def chat_structured(self, prompt, schema=None, model=None):
+        """
+        结构化输出: 利用 OpenAI 兼容 API 的 response_format 强制模型输出合法 JSON。
+
+        :param prompt: 用户 Prompt
+        :param schema: JSON schema 对象 (严格约束) 或 None (仅 JSON mode)
+        :param model: 模型名称
+        :return: (dict, 错误信息)
+        """
+        model_name = model or self.model
+
+        if not self.api_key:
+            return None, '未配置 API Key'
+        if not prompt or not prompt.strip():
+            return None, 'Prompt 不能为空'
+        if len(prompt) > 10000:
+            prompt = prompt[:10000]
+
+        if schema:
+            response_format = {
+                'type': 'json_schema',
+                'json_schema': {
+                    'name': 'structured_output',
+                    'strict': True,
+                    'schema': schema,
+                },
+            }
+        else:
+            response_format = {'type': 'json_object'}
+
+        payload = {
+            'model': model_name,
+            'messages': [
+                {'role': 'system', 'content': '你是一名资深网络安全专家，擅长漏洞分析、渗透测试和安全评估。请严格按要求的 JSON 格式输出。'},
+                {'role': 'user', 'content': prompt}
+            ],
+            'max_tokens': 1500,
+            'temperature': 0.0,
+            'stream': False,
+            'response_format': response_format,
+        }
+
+        try:
+            logger.info('API chat_structured: model=%s, prompt_len=%d', model_name, len(prompt))
+            resp = requests.post(
+                f'{self.base_url}/chat/completions',
+                headers=self.headers,
+                json=payload,
+                timeout=self.timeout
+            )
+
+            if resp.status_code == 200:
+                data = resp.json()
+                text = data['choices'][0]['message']['content']
+                try:
+                    parsed = json.loads(text)
+                    if isinstance(parsed, dict):
+                        logger.info('API chat_structured 完成: keys=%s', list(parsed.keys()))
+                        return parsed, None
+                    return None, '结构化输出不是 JSON 对象'
+                except (json.JSONDecodeError, ValueError):
+                    logger.warning('API 结构化输出解析失败, 返回原始文本')
+                    return None, '结构化输出解析失败'
+            elif resp.status_code == 401:
+                return None, 'API Key 无效或已过期'
+            elif resp.status_code == 429:
+                return None, 'API 调用频率超限，请稍后重试'
+            else:
+                error_msg = ''
+                try:
+                    error_msg = resp.json().get('error', {}).get('message', '')
+                except Exception:
+                    pass
+                return None, f'API 返回错误: HTTP {resp.status_code} {error_msg}'
+
+        except requests.ConnectionError:
+            return None, '无法连接 API 服务，请检查网络'
+        except requests.Timeout:
+            return None, f'API 推理超时 (>{self.timeout}秒)'
+        except Exception as e:
+            return None, f'API 调用异常: {str(e)}'
+
     def chat_stream(self, prompt, model=None):
         """
         流式调用 (SSE 兼容)

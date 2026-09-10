@@ -33,6 +33,17 @@ class LLMPlanner:
     # 默认最大迭代轮数 (每轮最多调用一个工具)
     DEFAULT_MAX_ITERATIONS = 6
 
+    # 结构化输出 JSON schema (宽松: 仅 action 必填, 兼容 Ollama/OpenAI 两种后端)
+    PLANNER_SCHEMA = {
+        'type': 'object',
+        'properties': {
+            'action': {'type': 'string'},
+            'params': {'type': 'object', 'additionalProperties': True},
+            'answer': {'type': 'string'},
+        },
+        'required': ['action'],
+    }
+
     def __init__(self, registry: ToolRegistry = None, executor: ToolExecutor = None,
                  max_iterations: int = None):
         self.registry = registry or ToolRegistry()
@@ -73,14 +84,12 @@ class LLMPlanner:
             # 构建本轮 prompt: system + 用户意图 + 历史观察 + 决策指令
             prompt = self._build_turn_prompt(system_prompt, user_intent, observations)
 
-            text, error = llm.chat(prompt, model=model)
+            action, error = self._get_action(llm, prompt, model)
             if error:
                 logger.warning('LLM 规划器第 %d 轮调用失败: %s', iteration + 1, error)
                 return tool_calls, results, None, f'LLM 调用失败: {error}'
-
-            action = self._parse_action(text)
             if action is None:
-                logger.warning('LLM 规划器第 %d 轮输出无法解析: %s', iteration + 1, text[:200])
+                logger.warning('LLM 规划器第 %d 轮输出无法解析', iteration + 1)
                 return tool_calls, results, None, 'LLM 输出无法解析为有效动作'
 
             # 输出最终结论
@@ -194,6 +203,47 @@ class LLMPlanner:
 
     # ==================== 输出解析 ====================
 
+    def _get_action(self, llm, prompt: str, model: str = None):
+        """
+        获取 LLM 决策动作, 优先使用结构化输出, 失败时降级到正则解析。
+
+        :return: (action_dict, error)
+                 - action_dict: {'type': 'tool'/'final', ...} 或 None (解析失败)
+                 - error: 错误信息 (LLM 调用失败时非空)
+        """
+        # 1. 优先结构化输出 (后端原生 JSON 约束)
+        if hasattr(llm, 'chat_structured'):
+            parsed, err = llm.chat_structured(prompt, schema=self.PLANNER_SCHEMA, model=model)
+            if err is None and isinstance(parsed, dict):
+                action = self._parse_action_dict(parsed)
+                if action is not None:
+                    return action, None
+            # 结构化输出失败, 降级到 chat + 正则
+
+        # 2. 降级: 普通 chat + 正则解析
+        text, err = llm.chat(prompt, model=model)
+        if err:
+            return None, err
+        return self._parse_action(text), None
+
+    @staticmethod
+    def _parse_action_dict(parsed: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """从已解析的 dict 中提取动作 (供结构化输出使用)"""
+        if not isinstance(parsed, dict):
+            return None
+        action = parsed.get('action', '')
+        if not action:
+            return None
+
+        if action == 'final':
+            answer = parsed.get('answer', '')
+            return {'type': 'final', 'answer': str(answer)}
+
+        params = parsed.get('params', {})
+        if not isinstance(params, dict):
+            params = {}
+        return {'type': 'tool', 'tool': str(action), 'params': params}
+
     @staticmethod
     def _parse_action(text: str) -> Optional[Dict[str, Any]]:
         """
@@ -210,19 +260,7 @@ class LLMPlanner:
         if not parsed or not isinstance(parsed, dict):
             return None
 
-        action = parsed.get('action', '')
-        if not action:
-            return None
-
-        if action == 'final':
-            answer = parsed.get('answer', '')
-            return {'type': 'final', 'answer': str(answer)}
-
-        # 工具调用
-        params = parsed.get('params', {})
-        if not isinstance(params, dict):
-            params = {}
-        return {'type': 'tool', 'tool': str(action), 'params': params}
+        return LLMPlanner._parse_action_dict(parsed)
 
     @staticmethod
     def _extract_json(text: str) -> Optional[Any]:

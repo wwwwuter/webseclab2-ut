@@ -103,6 +103,66 @@ class OllamaService:
             logger.error('Ollama调用异常: %s', e)
             return '', f'Ollama调用异常: {str(e)}'
 
+    def chat_structured(self, prompt, schema=None, model=None):
+        """
+        结构化输出: 利用 Ollama 的 format 参数强制模型输出合法 JSON。
+
+        :param prompt: 用户Prompt字符串
+        :param schema: JSON schema 对象 (严格约束) 或 None (仅强制 JSON)
+        :param model: 模型名称
+        :return: (dict, 错误信息)
+        """
+        model_name = model or self.model
+
+        if not prompt or not prompt.strip():
+            return None, 'Prompt不能为空'
+        if len(prompt) > 10000:
+            prompt = prompt[:10000]
+
+        payload = {
+            'model': model_name,
+            'prompt': prompt,
+            'stream': False,
+            'format': schema if schema else 'json',
+            'options': {
+                'num_predict': 1500,
+                'temperature': 0.0,  # 结构化输出用低温保证确定性
+            },
+        }
+
+        try:
+            logger.info('Ollama chat_structured: model=%s, prompt_len=%d', model_name, len(prompt))
+            resp = requests.post(
+                f'{self.base_url}/api/generate',
+                json=payload,
+                timeout=self.timeout
+            )
+
+            if resp.status_code == 200:
+                data = resp.json()
+                response_text = data.get('response', '')
+                try:
+                    parsed = json.loads(response_text)
+                    if isinstance(parsed, dict):
+                        logger.info('Ollama chat_structured 完成: keys=%s', list(parsed.keys()))
+                        return parsed, None
+                    return None, '结构化输出不是 JSON 对象'
+                except (json.JSONDecodeError, ValueError):
+                    logger.warning('Ollama 结构化输出解析失败, 返回原始文本')
+                    return None, '结构化输出解析失败'
+            elif resp.status_code == 404:
+                return None, f'模型 {model_name} 未找到，请先安装: ollama pull {model_name}'
+            else:
+                return None, f'Ollama返回错误: HTTP {resp.status_code}'
+
+        except requests.ConnectionError:
+            return None, 'Ollama服务未启动，请运行: ollama serve'
+        except requests.Timeout:
+            return None, f'模型推理超时(>{self.timeout}秒)'
+        except Exception as e:
+            logger.error('Ollama chat_structured 异常: %s', e)
+            return None, f'Ollama调用异常: {str(e)}'
+
     def chat_stream(self, prompt, model=None):
         """
         流式输出: 逐 token 生成器

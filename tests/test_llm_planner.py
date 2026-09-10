@@ -222,3 +222,80 @@ class TestMCPManagerFallback:
         assert result['tools_executed'] == ['dashboard']
         assert result['final_answer'] == '态势概览完成'
         assert 'AI 规划总结' in result['summary']
+
+
+# ==================== 结构化输出 (chat_structured) ====================
+
+class FakeStructuredLLM:
+    """模拟支持 chat_structured 的 LLM 后端"""
+
+    def __init__(self, structured_responses, chat_responses=None):
+        self.structured_responses = list(structured_responses)
+        self.chat_responses = list(chat_responses or [])
+        self.structured_calls = []
+        self.chat_calls = []
+
+    def chat_structured(self, prompt, schema=None, model=None):
+        self.structured_calls.append(prompt)
+        idx = len(self.structured_calls) - 1
+        if idx < len(self.structured_responses):
+            return self.structured_responses[idx]
+        return None, '结构化输出失败'
+
+    def chat(self, prompt, model=None):
+        self.chat_calls.append(prompt)
+        idx = len(self.chat_calls) - 1
+        if idx < len(self.chat_responses):
+            return self.chat_responses[idx], None
+        return '{"action": "final", "answer": "默认结束"}', None
+
+
+class TestStructuredOutput:
+    def test_uses_chat_structured_first(self, monkeypatch):
+        """优先使用 chat_structured 获取动作"""
+        llm = FakeStructuredLLM([
+            ({'action': 'dashboard', 'params': {}}, None),
+            ({'action': 'final', 'answer': '结构化完成'}, None),
+        ])
+        planner = _make_planner(monkeypatch, [])
+        monkeypatch.setattr(planner, '_build_llm', lambda: llm)
+
+        tool_calls, results, final_answer, error = planner.plan(user_id=1)
+
+        assert error is None
+        assert len(llm.structured_calls) == 2
+        assert llm.chat_calls == []  # 未降级到 chat
+        assert final_answer == '结构化完成'
+
+    def test_fallback_to_chat_when_structured_fails(self, monkeypatch):
+        """chat_structured 失败时降级到 chat + 正则解析"""
+        llm = FakeStructuredLLM(
+            structured_responses=[(None, '结构化输出失败')],
+            chat_responses=['{"action": "final", "answer": "降级完成"}'],
+        )
+        planner = _make_planner(monkeypatch, [])
+        monkeypatch.setattr(planner, '_build_llm', lambda: llm)
+
+        tool_calls, results, final_answer, error = planner.plan(user_id=1)
+
+        assert error is None
+        assert len(llm.structured_calls) == 1
+        assert len(llm.chat_calls) == 1  # 已降级
+        assert final_answer == '降级完成'
+
+    def test_parse_action_dict(self):
+        """_parse_action_dict 从 dict 提取动作"""
+        assert LLMPlanner._parse_action_dict(
+            {'action': 'scanner', 'params': {'target': 'x'}})['type'] == 'tool'
+        assert LLMPlanner._parse_action_dict(
+            {'action': 'final', 'answer': 'ok'})['type'] == 'final'
+        assert LLMPlanner._parse_action_dict({'params': {}}) is None
+        assert LLMPlanner._parse_action_dict(None) is None
+
+    def test_planner_schema_has_required_action(self):
+        """PLANNER_SCHEMA 必须包含 action 必填字段"""
+        schema = LLMPlanner.PLANNER_SCHEMA
+        assert schema['type'] == 'object'
+        assert 'action' in schema['required']
+        assert 'params' in schema['properties']
+        assert 'answer' in schema['properties']

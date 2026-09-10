@@ -26,6 +26,23 @@ logger = logging.getLogger(__name__)
 class AIService:
     """AI漏洞分析主服务类"""
 
+    # 分析结果结构化输出 JSON schema (六字段, 兼容 Ollama/OpenAI 两种后端)
+    ANALYSIS_SCHEMA = {
+        'type': 'object',
+        'properties': {
+            'risk_level': {'type': 'string', 'enum': ['Critical', 'High', 'Medium', 'Low']},
+            'vulnerability_analysis': {'type': 'string'},
+            'possible_attack': {'type': 'string'},
+            'impact': {'type': 'string'},
+            'fix_solution': {'type': 'string'},
+            'security_advice': {'type': 'string'},
+        },
+        'required': [
+            'risk_level', 'vulnerability_analysis', 'possible_attack',
+            'impact', 'fix_solution', 'security_advice',
+        ],
+    }
+
     def __init__(self, model=None):
         self.prompt_builder = PromptBuilder()
         self.rag = RAGService()
@@ -64,15 +81,14 @@ class AIService:
         if analysis is None:
             return None, prompt  # prompt此时是错误信息
 
-        response_text, error = self.llm.chat(prompt, model=model_name)
+        parsed, raw_output, error = self._chat_structured_or_fallback(prompt, model_name)
         if error:
             analysis.status = AIAnalysis.STATUS_FAILED
             analysis.error_message = error
             db.session.commit()
             return analysis, error
 
-        analysis.raw_output = response_text
-        parsed = self._parse_json_output(response_text)
+        analysis.raw_output = raw_output
         self._apply_parsed_result(analysis, parsed)
         analysis.status = AIAnalysis.STATUS_COMPLETED
         db.session.commit()
@@ -84,15 +100,14 @@ class AIService:
         if analysis is None:
             return None, prompt
 
-        response_text, error = self.llm.chat(prompt, model=model_name)
+        parsed, raw_output, error = self._chat_structured_or_fallback(prompt, model_name)
         if error:
             analysis.status = AIAnalysis.STATUS_FAILED
             analysis.error_message = error
             db.session.commit()
             return analysis, error
 
-        analysis.raw_output = response_text
-        parsed = self._parse_json_output(response_text)
+        analysis.raw_output = raw_output
         self._apply_parsed_result(analysis, parsed)
         analysis.status = AIAnalysis.STATUS_COMPLETED
         db.session.commit()
@@ -104,15 +119,14 @@ class AIService:
         if analysis is None:
             return None, prompt
 
-        response_text, error = self.llm.chat(prompt, model=model_name)
+        parsed, raw_output, error = self._chat_structured_or_fallback(prompt, model_name)
         if error:
             analysis.status = AIAnalysis.STATUS_FAILED
             analysis.error_message = error
             db.session.commit()
             return analysis, error
 
-        analysis.raw_output = response_text
-        parsed = self._parse_json_output(response_text)
+        analysis.raw_output = raw_output
         self._apply_parsed_result(analysis, parsed)
         analysis.status = AIAnalysis.STATUS_COMPLETED
         db.session.commit()
@@ -403,6 +417,29 @@ class AIService:
         return True, None
 
     # ==================== 内部方法 ====================
+
+    def _chat_structured_or_fallback(self, prompt, model_name):
+        """
+        优先使用结构化输出 (后端原生 JSON 约束), 失败时降级到 chat + 正则解析。
+
+        :return: (parsed, raw_text, error)
+                 - parsed: 解析后的 dict 或 None
+                 - raw_text: 原始输出文本 (用于存储 raw_output)
+                 - error: 错误信息 (LLM 调用失败时非空)
+        """
+        # 1. 优先结构化输出
+        if hasattr(self.llm, 'chat_structured'):
+            parsed, err = self.llm.chat_structured(
+                prompt, schema=self.ANALYSIS_SCHEMA, model=model_name)
+            if err is None and isinstance(parsed, dict):
+                return parsed, json.dumps(parsed, ensure_ascii=False), None
+            # 结构化输出失败, 降级到 chat + 正则
+
+        # 2. 降级: 普通 chat + 正则解析
+        text, err = self.llm.chat(prompt, model=model_name)
+        if err:
+            return None, '', err
+        return self._parse_json_output(text), text, None
 
     @staticmethod
     def _parse_json_output(text):
