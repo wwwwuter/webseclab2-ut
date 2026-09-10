@@ -44,7 +44,7 @@ def _make_planner(monkeypatch, responses, max_iterations=None):
     registry = register_all_tools()
     planner = LLMPlanner(registry=registry, max_iterations=max_iterations)
     planner.executor = FakeExecutor()
-    monkeypatch.setattr(planner, '_build_llm', lambda: FakeLLM(responses))
+    monkeypatch.setattr(planner, '_build_llm', lambda user_id=None: FakeLLM(responses))
     return planner
 
 
@@ -105,7 +105,7 @@ class TestPlanReAct:
     def test_llm_unavailable(self, monkeypatch):
         registry = register_all_tools()
         planner = LLMPlanner(registry=registry)
-        monkeypatch.setattr(planner, '_build_llm', lambda: None)
+        monkeypatch.setattr(planner, '_build_llm', lambda user_id=None: None)
 
         tool_calls, results, final_answer, error = planner.plan(user_id=1)
         assert error is not None
@@ -172,7 +172,7 @@ class TestPlanReAct:
             def chat(self, prompt, model=None):
                 return '', '模型推理超时'
 
-        monkeypatch.setattr(planner, '_build_llm', lambda: FailingLLM())
+        monkeypatch.setattr(planner, '_build_llm', lambda user_id=None: FailingLLM())
         tool_calls, results, final_answer, error = planner.plan(user_id=1)
         assert error is not None
         assert '模型推理超时' in error
@@ -188,7 +188,7 @@ class TestMCPManagerFallback:
 
         from app.services.mcp.mcp_manager import MCPManager
         manager = MCPManager()
-        monkeypatch.setattr(manager.planner, '_build_llm', lambda: None)
+        monkeypatch.setattr(manager.planner, '_build_llm', lambda user_id=None: None)
 
         result = manager.execute_analysis_plan(user_id=test_user.id, target='127.0.0.1')
 
@@ -209,7 +209,7 @@ class TestMCPManagerFallback:
         manager.planner.executor = FakeExecutor()
         monkeypatch.setattr(
             manager.planner, '_build_llm',
-            lambda: FakeLLM([
+            lambda user_id=None: FakeLLM([
                 '{"action": "dashboard", "params": {}}',
                 '{"action": "final", "answer": "态势概览完成"}',
             ]),
@@ -258,7 +258,7 @@ class TestStructuredOutput:
             ({'action': 'final', 'answer': '结构化完成'}, None),
         ])
         planner = _make_planner(monkeypatch, [])
-        monkeypatch.setattr(planner, '_build_llm', lambda: llm)
+        monkeypatch.setattr(planner, '_build_llm', lambda user_id=None: llm)
 
         tool_calls, results, final_answer, error = planner.plan(user_id=1)
 
@@ -274,7 +274,7 @@ class TestStructuredOutput:
             chat_responses=['{"action": "final", "answer": "降级完成"}'],
         )
         planner = _make_planner(monkeypatch, [])
-        monkeypatch.setattr(planner, '_build_llm', lambda: llm)
+        monkeypatch.setattr(planner, '_build_llm', lambda user_id=None: llm)
 
         tool_calls, results, final_answer, error = planner.plan(user_id=1)
 

@@ -103,7 +103,61 @@
         </div>
     </div>
 
-    <!-- 模块四：最近登录 -->
+    <!-- 模块四：AI 引擎配置（用户独立） -->
+    <div class="card mb-4">
+        <div class="card-header d-flex align-items-center justify-content-between">
+            <span><i class="bi bi-cpu me-2"></i>AI 引擎配置</span>
+            <span class="badge bg-light text-muted fw-normal" id="ai-config-status">加载中...</span>
+        </div>
+        <div class="card-body">
+            <div class="form-text mb-3">
+                配置你自己的 AI 引擎（API Key 加密存储，仅你可见）。未配置时使用系统全局配置。
+            </div>
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label">模式</label>
+                    <select class="form-select" id="ai-mode">
+                        <option value="">使用全局配置</option>
+                        <option value="ollama">本地 Ollama</option>
+                        <option value="api">云端 API</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">提供商</label>
+                    <select class="form-select" id="ai-provider">
+                        <option value="">默认</option>
+                        <option value="deepseek">DeepSeek</option>
+                        <option value="dashscope">阿里云百炼</option>
+                        <option value="openai">OpenAI</option>
+                        <option value="custom">自定义</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">API Key</label>
+                    <input type="password" class="form-control" id="ai-api-key" placeholder="sk-..." autocomplete="off">
+                    <div class="form-text" id="ai-key-hint"></div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Base URL（可选）</label>
+                    <input type="text" class="form-control" id="ai-base-url" placeholder="https://...">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">模型（可选）</label>
+                    <input type="text" class="form-control" id="ai-model" placeholder="deepseek-chat">
+                </div>
+            </div>
+            <div class="d-flex gap-2 mt-3">
+                <button type="button" class="btn btn-primary" id="ai-save">
+                    <i class="bi bi-check-lg"></i> 保存配置
+                </button>
+                <button type="button" class="btn btn-outline-secondary" id="ai-clear">
+                    <i class="bi bi-arrow-counterclockwise"></i> 清除配置
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 模块五：最近登录 -->
     <div class="card mb-4">
         <div class="card-header">最近登录</div>
         <div class="card-body">

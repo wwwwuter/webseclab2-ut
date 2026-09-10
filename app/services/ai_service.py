@@ -43,29 +43,31 @@ class AIService:
         ],
     }
 
-    def __init__(self, model=None):
+    def __init__(self, model=None, user_id=None):
         self.prompt_builder = PromptBuilder()
         self.rag = RAGService()
+        self._user_id = user_id
+        self.llm = self._build_llm_from_config(user_id, model)
 
-        # 根据配置选择 LLM 后端
-        try:
-            mode = current_app.config.get('LLM_MODE', 'ollama')
-        except RuntimeError:
-            mode = 'ollama'  # 测试环境无 app context
+    def _build_llm_from_config(self, user_id=None, model=None):
+        """根据用户配置 (优先) 或全局配置构建 LLM 后端"""
+        from app.services.llm_config_service import get_user_llm_config
+        cfg = get_user_llm_config(user_id)
 
-        if mode == 'api':
-            try:
-                cfg = current_app.config
-            except RuntimeError:
-                cfg = {}
-            self.llm = OpenAICompatibleService(
-                provider=cfg.get('LLM_API_PROVIDER', 'deepseek'),
-                api_key=cfg.get('LLM_API_KEY', ''),
-                base_url=cfg.get('LLM_API_BASE_URL', '') or None,
-                model=cfg.get('LLM_API_MODEL', '') or None,
+        if cfg['mode'] == 'api':
+            return OpenAICompatibleService(
+                provider=cfg['provider'],
+                api_key=cfg['api_key'],
+                base_url=cfg['base_url'],
+                model=cfg['model'],
             )
-        else:
-            self.llm = OllamaService(model=model or 'qwen2.5:7b')
+        return OllamaService(model=model or 'qwen2.5:7b')
+
+    def _ensure_llm_for_user(self, user_id):
+        """确保 self.llm 是按指定用户配置构建的 (用户切换时重建)"""
+        if user_id is not None and user_id != self._user_id:
+            self._user_id = user_id
+            self.llm = self._build_llm_from_config(user_id)
 
     def is_available(self):
         return self.llm.is_available()
@@ -220,6 +222,7 @@ class AIService:
 
     def _prepare_experiment_analysis(self, user_id, experiment_id, model=None):
         """准备实验分析: 获取数据 → RAG → 构建Prompt → 创建DB记录"""
+        self._ensure_llm_for_user(user_id)
         experiment = db.session.get(Experiment, experiment_id)
         if not experiment:
             return None, '实验不存在', None
@@ -274,6 +277,7 @@ class AIService:
 
     def _prepare_scan_analysis(self, user_id, scan_task_id, model=None):
         """准备扫描分析"""
+        self._ensure_llm_for_user(user_id)
         task = db.session.get(ScanTask, scan_task_id)
         if not task:
             return None, '扫描任务不存在', None
@@ -302,6 +306,7 @@ class AIService:
 
     def _prepare_custom_analysis(self, user_id, input_data, model=None, scene=None, use_rag=False):
         """准备自定义分析"""
+        self._ensure_llm_for_user(user_id)
         if not input_data or not input_data.strip():
             return None, '输入数据不能为空', None
 

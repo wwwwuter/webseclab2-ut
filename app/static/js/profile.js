@@ -250,4 +250,81 @@
                 .finally(function () { spin(avSave, false); });
         });
     }
+
+    /* =========================================================
+       AI 引擎配置（用户独立）
+       ========================================================= */
+    var aiMode = document.getElementById('ai-mode');
+    var aiProvider = document.getElementById('ai-provider');
+    var aiApiKey = document.getElementById('ai-api-key');
+    var aiBaseUrl = document.getElementById('ai-base-url');
+    var aiModel = document.getElementById('ai-model');
+    var aiSave = document.getElementById('ai-save');
+    var aiClear = document.getElementById('ai-clear');
+    var aiStatus = document.getElementById('ai-config-status');
+    var aiKeyHint = document.getElementById('ai-key-hint');
+
+    function loadAiConfig() {
+        fetch('/profile/api/ai-config', { credentials: 'same-origin' })
+            .then(function (r) { return r.json(); })
+            .then(function (res) {
+                if (!res.ok) return;
+                var c = res.config || {};
+                aiMode.value = c.mode || '';
+                aiProvider.value = c.provider || '';
+                aiBaseUrl.value = c.base_url || '';
+                aiModel.value = c.model || '';
+                if (c.has_api_key) {
+                    aiApiKey.value = '';
+                    aiApiKey.placeholder = c.api_key_masked || '已配置';
+                    if (aiKeyHint) aiKeyHint.textContent = '已配置：' + (c.api_key_masked || '');
+                    if (aiStatus) aiStatus.textContent = '已配置';
+                } else {
+                    aiApiKey.value = '';
+                    aiApiKey.placeholder = 'sk-...';
+                    if (aiKeyHint) aiKeyHint.textContent = '';
+                    if (aiStatus) aiStatus.textContent = '使用全局配置';
+                }
+            })
+            .catch(function () { if (aiStatus) aiStatus.textContent = '加载失败'; });
+    }
+
+    if (aiSave) {
+        aiSave.addEventListener('click', function () {
+            var mode = aiMode.value;
+            if (!mode) { notify('请选择模式', 'warning'); return; }
+            spin(aiSave, true, '保存中...');
+            postJSON('/profile/api/ai-config', {
+                mode: mode,
+                provider: aiProvider.value,
+                api_key: aiApiKey.value,
+                base_url: aiBaseUrl.value,
+                model: aiModel.value
+            })
+                .then(function (res) {
+                    if (!res.ok) throw new Error(res.msg || '保存失败');
+                    notify(res.msg || '保存成功', 'success');
+                    loadAiConfig();
+                })
+                .catch(function (err) { notify(err.message || '保存失败', 'danger'); })
+                .finally(function () { spin(aiSave, false); });
+        });
+    }
+
+    if (aiClear) {
+        aiClear.addEventListener('click', function () {
+            if (!window.confirm('确定清除你的 AI 引擎配置？将回退到系统全局配置。')) return;
+            spin(aiClear, true, '清除中...');
+            postJSON('/profile/api/ai-config', { clear: true })
+                .then(function (res) {
+                    if (!res.ok) throw new Error(res.msg || '清除失败');
+                    notify(res.msg || '已清除', 'success');
+                    loadAiConfig();
+                })
+                .catch(function (err) { notify(err.message || '清除失败', 'danger'); })
+                .finally(function () { spin(aiClear, false); });
+        });
+    }
+
+    if (aiMode) loadAiConfig();
 })();

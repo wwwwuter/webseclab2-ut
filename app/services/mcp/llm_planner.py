@@ -69,7 +69,7 @@ class LLMPlanner:
                  - final_answer: LLM 最终总结 (成功时非空)
                  - error: 错误信息 (失败时非空)
         """
-        llm = self._build_llm()
+        llm = self._build_llm(user_id)
         if llm is None:
             return [], [], None, 'LLM 服务不可用 (未配置或未启动)'
 
@@ -121,22 +121,18 @@ class LLMPlanner:
 
     # ==================== LLM 后端 ====================
 
-    def _build_llm(self):
-        """根据配置构建 LLM 后端 (与 AIService 保持一致的选择逻辑)"""
-        try:
-            from flask import current_app
-            cfg = current_app.config
-        except RuntimeError:
-            cfg = {}
+    def _build_llm(self, user_id=None):
+        """根据用户配置 (优先) 或全局配置构建 LLM 后端 (与 AIService 保持一致)"""
+        from app.services.llm_config_service import get_user_llm_config
+        cfg = get_user_llm_config(user_id)
 
-        mode = cfg.get('LLM_MODE', 'ollama')
-        if mode == 'api':
+        if cfg['mode'] == 'api':
             from app.services.openai_service import OpenAICompatibleService
             return OpenAICompatibleService(
-                provider=cfg.get('LLM_API_PROVIDER', 'deepseek'),
-                api_key=cfg.get('LLM_API_KEY', ''),
-                base_url=cfg.get('LLM_API_BASE_URL', '') or None,
-                model=cfg.get('LLM_API_MODEL', '') or None,
+                provider=cfg['provider'],
+                api_key=cfg['api_key'],
+                base_url=cfg['base_url'],
+                model=cfg['model'],
             )
         from app.services.ollama_service import OllamaService
         return OllamaService()

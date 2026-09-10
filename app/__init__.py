@@ -274,29 +274,45 @@ def _ensure_ai_analysis_schema():
 def _ensure_user_schema():
     """同步 users 表结构到最新模型 (create_all 不会给已存在的表加列)。
 
-    仅补 nickname 一列; 其他列由 create_all 在建表时保证。
+    补齐 nickname 及用户独立 LLM 配置字段; 其他列由 create_all 在建表时保证。
     全程使用原始 SQL, 避免 ORM mapper 在列尚未就绪时报错。
     """
     from sqlalchemy import text
     import logging
     log = logging.getLogger(__name__)
 
+    # 需补齐的列 (与 app/models/user.py 保持一致)
+    _USER_COLS = {
+        'nickname': 'VARCHAR(64)',
+        'llm_mode': 'VARCHAR(16)',
+        'llm_api_provider': 'VARCHAR(32)',
+        'llm_api_key_encrypted': 'TEXT',
+        'llm_api_base_url': 'VARCHAR(256)',
+        'llm_api_model': 'VARCHAR(128)',
+    }
+
     try:
         db_cols = [r[0] for r in db.session.execute(
             text('PRAGMA table_info(users)')
         ).fetchall()]
 
-        if 'nickname' not in db_cols:
-            try:
-                db.session.execute(
-                    text('ALTER TABLE users ADD COLUMN nickname VARCHAR(64)')
-                )
-                db.session.commit()
-                db.engine.dispose()
-                log.info('[migration] 已添加 users.nickname')
-            except Exception as e:
-                if 'duplicate' not in str(e).lower():
-                    raise
+        added = []
+        for col_name, col_type in _USER_COLS.items():
+            if col_name not in db_cols:
+                try:
+                    db.session.execute(
+                        text(f'ALTER TABLE users ADD COLUMN {col_name} {col_type}')
+                    )
+                    added.append(col_name)
+                    log.info('[migration] 已添加 users.%s', col_name)
+                except Exception as e:
+                    if 'duplicate' not in str(e).lower():
+                        raise
+
+        if added:
+            db.session.commit()
+            db.engine.dispose()
+            log.info('[migration] users 补列完成: %s', ', '.join(added))
     except Exception as e:
         log.error('[migration] users 表结构同步失败: %s', e, exc_info=True)
 
@@ -345,7 +361,7 @@ def _seed_rbac():
             ('experiment:create', '创建实验', 'experiment'),
             ('experiment:view', '查看实验', 'experiment'),
             ('experiment:delete', '删除实验', 'experiment'),
-            ('experiment:manage', '管理所有实验', 'experiment'),
+            ('experiment:manage', '���理所有实验', 'experiment'),
             ('scan:start', '启动扫描', 'scan'),
             ('scan:view', '查看扫描', 'scan'),
             ('vulnerability:view', '查看漏洞知识库', 'vulnerability'),
@@ -425,7 +441,7 @@ def _seed_rbac():
 
                 created_roles += 1
             else:
-                # 角色已存在, 补充缺失的权限关联
+                # 角色已存在, ���充缺失的权限关联
                 for perm_code in meta['permissions']:
                     perm = perm_objects.get(perm_code)
                     if perm and not existing.has_permission(perm_code):

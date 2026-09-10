@@ -20,6 +20,7 @@ from app.extensions import db
 from app.models.user import User
 from app.models.login_log import LoginLog
 from app.services.dashboard_service import DashboardService
+from app.services.crypto_service import encrypt_api_key, decrypt_api_key, mask_api_key
 
 profile_bp = Blueprint('profile', __name__, template_folder='../templates')
 _dash = DashboardService()
@@ -167,3 +168,68 @@ def api_login_history():
         'browser': h.browser or '未知',
         'os': h.os or '未知',
     } for h in history])
+
+
+# ==================== AI 引擎配置 (用户独立) ====================
+
+# 允许的提供商白名单
+ALLOWED_LLM_PROVIDERS = {'deepseek', 'dashscope', 'openai', 'custom'}
+
+
+@profile_bp.route('/profile/api/ai-config', methods=['GET'])
+@login_required
+def api_get_ai_config():
+    """获取当前用户的 AI 引擎配置 (API Key 只返回掩码, 不返回明文)"""
+    user = current_user
+    has_key = bool(user.llm_api_key_encrypted)
+    return jsonify(ok=True, config={
+        'mode': user.llm_mode or '',
+        'provider': user.llm_api_provider or '',
+        'api_key_masked': mask_api_key(
+            decrypt_api_key(user.llm_api_key_encrypted)) if has_key else '',
+        'has_api_key': has_key,
+        'base_url': user.llm_api_base_url or '',
+        'model': user.llm_api_model or '',
+    })
+
+
+@profile_bp.route('/profile/api/ai-config', methods=['POST'])
+@login_required
+def api_save_ai_config():
+    """保存当前用户的 AI 引擎配置; API Key 为空时保留原值; clear=1 时清除配置回退全局"""
+    data = request.get_json(silent=True) or request.form
+    user = current_user
+
+    # 清除配置: 清空所有用户字段, 回退全局
+    if data.get('clear'):
+        user.llm_mode = None
+        user.llm_api_provider = None
+        user.llm_api_key_encrypted = None
+        user.llm_api_base_url = None
+        user.llm_api_model = None
+        db.session.commit()
+        return jsonify(ok=True, msg='已清除配置，将使用系统全局配置')
+
+    mode = (data.get('mode') or '').strip()
+    if mode not in ('ollama', 'api'):
+        return jsonify(ok=False, msg='模式无效')
+
+    provider = (data.get('provider') or '').strip()
+    if mode == 'api' and provider and provider not in ALLOWED_LLM_PROVIDERS:
+        return jsonify(ok=False, msg='提供商无效')
+
+    base_url = (data.get('base_url') or '').strip()
+    model = (data.get('model') or '').strip()
+    api_key = (data.get('api_key') or '').strip()
+
+    user.llm_mode = mode
+    user.llm_api_provider = provider or None
+    user.llm_api_base_url = base_url or None
+    user.llm_api_model = model or None
+
+    # API Key: 非空则更新; 为空则保留原值
+    if api_key:
+        user.llm_api_key_encrypted = encrypt_api_key(api_key)
+
+    db.session.commit()
+    return jsonify(ok=True, msg='AI 引擎配置已保存')

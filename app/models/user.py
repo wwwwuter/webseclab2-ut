@@ -31,6 +31,18 @@ class User(UserMixin, db.Model):
     # 昵称（可选，默认与用户名相同；用于个人中心展示）
     nickname = db.Column(db.String(64), nullable=True)
 
+    # ==================== 用户独立 LLM 配置 (可选, 未配置时回退全局) ====================
+    # 模式: ollama / api; None 表示用全局配置
+    llm_mode = db.Column(db.String(16), nullable=True)
+    # 提供商: deepseek / dashscope / openai / 自定义
+    llm_api_provider = db.Column(db.String(32), nullable=True)
+    # 加密后的 API Key (用 SECRET_KEY 派生密钥加密, 前端只显示掩码)
+    llm_api_key_encrypted = db.Column(db.Text, nullable=True)
+    # 自定义 Base URL (留空用提供商默认)
+    llm_api_base_url = db.Column(db.String(256), nullable=True)
+    # 模型名 (留空用提供商默认)
+    llm_api_model = db.Column(db.String(128), nullable=True)
+
     # 创建时间
     created_time = db.Column(db.DateTime, default=datetime.now)
 
