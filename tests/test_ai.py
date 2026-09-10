@@ -95,7 +95,8 @@ class TestAIServiceUnit:
         svc = OllamaService()
         assert svc.is_available() is True
 
-        # 模拟不可用 (使用 requests.ConnectionError)
+        # 模拟不可用 (使用 requests.ConnectionError); 先清空缓存以绕过 TTL
+        OllamaService.clear_cache()
         mock_get.side_effect = req_lib.ConnectionError('Connection refused')
         assert svc.is_available() is False
 

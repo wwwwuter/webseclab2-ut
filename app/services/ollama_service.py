@@ -6,13 +6,26 @@ Ollama本地大模型服务封装模块
 
 import json
 import logging
+import time
 import requests
 
 logger = logging.getLogger(__name__)
 
+# 模块级 TTL 缓存: 避免每次打开页面都发起网络请求 (Ollama 未启动时超时 5s)
+# key 为 base_url, 不同用户配置的地址互不影响
+_availability_cache = {}  # {base_url: (ts, bool)}
+_models_cache = {}        # {base_url: (ts, list)}
+_CACHE_TTL = 30           # 秒
+
 
 class OllamaService:
     """Ollama API调用服务"""
+
+    @classmethod
+    def clear_cache(cls):
+        """清空模块级缓存 (测试/配置变更后调用)"""
+        _availability_cache.clear()
+        _models_cache.clear()
 
     def __init__(self, base_url='http://localhost:11434', model='qwen2.5:7b'):
         """
@@ -25,27 +38,43 @@ class OllamaService:
         self.timeout = 180  # 模型推理超时时间(秒), 流式模式适当放宽
 
     def is_available(self):
-        """检查Ollama服务是否可用"""
+        """检查Ollama服务是否可用 (带 30s TTL 缓存)"""
+        now = time.time()
+        cached = _availability_cache.get(self.base_url)
+        if cached and now - cached[0] < _CACHE_TTL:
+            return cached[1]
+
         try:
             resp = requests.get(f'{self.base_url}/api/tags', timeout=5)
             available = resp.status_code == 200
             if not available:
                 logger.warning('Ollama服务不可用: HTTP %d', resp.status_code)
-            return available
         except (requests.ConnectionError, requests.Timeout):
             logger.debug('Ollama服务连接失败: %s', self.base_url)
-            return False
+            available = False
+
+        _availability_cache[self.base_url] = (now, available)
+        return available
 
     def get_models(self):
-        """获取已安装的模型列表"""
+        """获取已安装的模型列表 (带 30s TTL 缓存)"""
+        now = time.time()
+        cached = _models_cache.get(self.base_url)
+        if cached and now - cached[0] < _CACHE_TTL:
+            return cached[1]
+
         try:
             resp = requests.get(f'{self.base_url}/api/tags', timeout=5)
             if resp.status_code == 200:
                 data = resp.json()
-                return [m['name'] for m in data.get('models', [])]
-            return []
+                models = [m['name'] for m in data.get('models', [])]
+            else:
+                models = []
         except (requests.ConnectionError, requests.Timeout, ValueError):
-            return []
+            models = []
+
+        _models_cache[self.base_url] = (now, models)
+        return models
 
     def chat(self, prompt, model=None):
         """

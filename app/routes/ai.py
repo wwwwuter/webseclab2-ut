@@ -34,7 +34,8 @@ def ai_history():
     sort_by = request.args.get('sort', 'created_time')
     order = request.args.get('order', 'desc')
 
-    pagination = _get_ai().get_user_analyses(
+    ai = _get_ai()
+    pagination = ai.get_user_analyses(
         current_user.id, page=page,
         keyword=keyword or None,
         source=source or None,
@@ -43,8 +44,8 @@ def ai_history():
         sort_by=sort_by,
         order=order
     )
-    ollama_available = _get_ai().is_available()
-    stats = _get_ai().get_user_statistics(current_user.id)
+    ollama_available = ai.is_available()
+    stats = ai.get_user_statistics(current_user.id)
 
     if request.headers.get('HX-Request'):
         return render_template('ai/_history_results.html',

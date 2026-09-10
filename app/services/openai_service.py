@@ -10,13 +10,26 @@ OpenAI 兼容 API 服务封装模块
 
 import json
 import logging
+import time
 import requests
 
 logger = logging.getLogger(__name__)
 
+# 模块级 TTL 缓存: 避免每次打开页面都发起网络请求 (API 不可用时超时 10s)
+# key 为 base_url, 不同用户配置的地址互不影响
+_availability_cache = {}  # {base_url: (ts, bool)}
+_models_cache = {}        # {base_url: (ts, list)}
+_CACHE_TTL = 30           # 秒
+
 
 class OpenAICompatibleService:
     """OpenAI 兼容 API 服务"""
+
+    @classmethod
+    def clear_cache(cls):
+        """清空模块级缓存 (测试/配置变更后调用)"""
+        _availability_cache.clear()
+        _models_cache.clear()
 
     # 预置提供商配置
     PROVIDERS = {
@@ -59,23 +72,36 @@ class OpenAICompatibleService:
         }
 
     def is_available(self):
-        """检查 API 是否可用 (尝试列出模型)"""
+        """检查 API 是否可用 (尝试列出模型, 带 30s TTL 缓存)"""
         if not self.api_key:
             return False
+        now = time.time()
+        cached = _availability_cache.get(self.base_url)
+        if cached and now - cached[0] < _CACHE_TTL:
+            return cached[1]
+
         try:
             resp = requests.get(
                 f'{self.base_url}/models',
                 headers=self.headers,
                 timeout=10
             )
-            return resp.status_code == 200
+            available = resp.status_code == 200
         except (requests.ConnectionError, requests.Timeout):
-            return False
+            available = False
+
+        _availability_cache[self.base_url] = (now, available)
+        return available
 
     def get_models(self):
-        """获取可用模型列表"""
+        """获取可用模型列表 (带 30s TTL 缓存)"""
         if not self.api_key:
             return []
+        now = time.time()
+        cached = _models_cache.get(self.base_url)
+        if cached and now - cached[0] < _CACHE_TTL:
+            return cached[1]
+
         try:
             resp = requests.get(
                 f'{self.base_url}/models',
@@ -84,10 +110,14 @@ class OpenAICompatibleService:
             )
             if resp.status_code == 200:
                 data = resp.json()
-                return [m['id'] for m in data.get('data', [])]
-            return []
+                models = [m['id'] for m in data.get('data', [])]
+            else:
+                models = []
         except Exception:
-            return []
+            models = []
+
+        _models_cache[self.base_url] = (now, models)
+        return models
 
     def chat(self, prompt, model=None):
         """
