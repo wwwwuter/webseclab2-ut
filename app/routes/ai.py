@@ -229,6 +229,7 @@ def ai_api_status(analysis_id):
         'impact': analysis.impact or '',
         'fix_solution': analysis.fix_solution or '',
         'security_advice': analysis.security_advice or '',
+        'references_list': analysis.references_list,
         'model': analysis.model or '',
     })
 

@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 class AIService:
     """AI漏洞分析主服务类"""
 
-    # 分析结果结构化输出 JSON schema (六字段, 兼容 Ollama/OpenAI 两种后端)
+    # 分析结果结构化输出 JSON schema (六字段 + 引用来源, 兼容 Ollama/OpenAI 两种后端)
     ANALYSIS_SCHEMA = {
         'type': 'object',
         'properties': {
@@ -36,6 +36,7 @@ class AIService:
             'impact': {'type': 'string'},
             'fix_solution': {'type': 'string'},
             'security_advice': {'type': 'string'},
+            'references': {'type': 'array', 'items': {'type': 'string'}},
         },
         'required': [
             'risk_level', 'vulnerability_analysis', 'possible_attack',
@@ -480,6 +481,13 @@ class AIService:
             analysis.impact = str(parsed.get('impact', ''))[:2000]
             analysis.fix_solution = str(parsed.get('fix_solution', ''))[:2000]
             analysis.security_advice = str(parsed.get('security_advice', ''))[:2000]
+            # 引用来源: 过滤空值, 去重, 存为 JSON 字符串
+            refs = parsed.get('references') or []
+            if isinstance(refs, list):
+                clean = [str(r).strip() for r in refs if str(r).strip()]
+                analysis.references = json.dumps(list(dict.fromkeys(clean)), ensure_ascii=False)
+            elif isinstance(refs, str) and refs.strip():
+                analysis.references = refs.strip()
         else:
             analysis.risk_level = 'Medium'
             analysis.vulnerability_analysis = analysis.raw_output[:2000] if analysis.raw_output else ''

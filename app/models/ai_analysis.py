@@ -54,6 +54,9 @@ class AIAnalysis(db.Model):
     # 安全建议
     security_advice = db.Column(db.Text, default='')
 
+    # 引用来源 (JSON字符串数组: CVE/CWE/OWASP编号)
+    references = db.Column(db.Text, default='')
+
     # 使用的模型名称
     model = db.Column(db.String(64), default='')
 
@@ -142,6 +145,21 @@ class AIAnalysis(db.Model):
             'failed': '失败'
         }
         return label_map.get(self.status, self.status)
+
+    @property
+    def references_list(self):
+        """解析引用来源为列表 (供前端展示)"""
+        if not self.references:
+            return []
+        import json
+        try:
+            data = json.loads(self.references)
+            if isinstance(data, list):
+                return [str(r).strip() for r in data if str(r).strip()]
+        except (json.JSONDecodeError, ValueError):
+            pass
+        # 非JSON时按逗号/分号拆分
+        return [r.strip() for r in self.references.replace(';', ',').split(',') if r.strip()]
 
     def is_owner(self, user_id):
         """验证用户是否为分析结果所有者"""

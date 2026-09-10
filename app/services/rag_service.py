@@ -7,6 +7,7 @@ RAG安全知识增强服务模块 (ChromaDB 语义检索版)
 import logging
 from app.models.vulnerability import Vulnerability
 from app.services.chroma_service import ChromaService
+from app.services.knowledge_graph_service import KnowledgeGraphService
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +17,7 @@ class RAGService:
 
     def __init__(self):
         self.chroma = ChromaService()
+        self.kg = KnowledgeGraphService()
 
     def retrieve_vuln_context(self, vulnerability):
         """
@@ -66,7 +68,65 @@ class RAGService:
                 for rv in related:
                     parts.append(f"- {rv.name}: {(rv.description or '')[:150]}")
 
+        # ---- 知识图谱关联信息 (CVE/CWE/OWASP/修复/攻击/同类漏洞) ----
+        graph_ctx = self.retrieve_vuln_graph_context(vulnerability)
+        if graph_ctx:
+            parts.append(graph_ctx)
+
         return '\n'.join(parts) if parts else ''
+
+    def retrieve_vuln_graph_context(self, vulnerability):
+        """
+        从知识图谱提取当前漏洞的关联信息 (CVE/CWE/OWASP/修复方案/攻击方式/同类漏洞)
+        作为独立段落返回, 与 ChromaDB 语义检索互补
+        :param vulnerability: Vulnerability模型对象
+        :return: 图谱关联上下文字符串 (无关联返回 '')
+        """
+        if not vulnerability or not vulnerability.id:
+            return ''
+
+        try:
+            subgraph = self.kg.get_ego_subgraph(f'vuln:{vulnerability.id}', hops=1)
+        except Exception as e:
+            logger.debug(f'知识图谱子图提取失败: {e}')
+            return ''
+
+        if not subgraph.get('found'):
+            return ''
+
+        # 按节点类型归类
+        cves, cwes, owasp, solutions, attacks, related = [], [], [], [], [], []
+        for node in subgraph.get('nodes', []):
+            ntype = node.get('type', '')
+            name = node.get('name', '')
+            if ntype == 'cve':
+                cves.append(name)
+            elif ntype == 'cwe':
+                cwes.append(name)
+            elif ntype == 'owasp':
+                owasp.append(name)
+            elif ntype == 'solution':
+                solutions.append(name)
+            elif ntype == 'attack':
+                attacks.append(name)
+            elif ntype == 'vulnerability' and node.get('id') != f'vuln:{vulnerability.id}':
+                related.append(name)
+
+        lines = ['\n--- 知识图谱关联信息 ---']
+        if cves:
+            lines.append(f"CVE编号: {', '.join(dict.fromkeys(cves))}")
+        if cwes:
+            lines.append(f"CWE编号: {', '.join(dict.fromkeys(cwes))}")
+        if owasp:
+            lines.append(f"OWASP分类: {', '.join(dict.fromkeys(owasp))}")
+        if attacks:
+            lines.append(f"攻击方式: {', '.join(dict.fromkeys(attacks))}")
+        if solutions:
+            lines.append(f"修复方案: {', '.join(dict.fromkeys(solutions))}")
+        if related:
+            lines.append(f"同类漏洞: {', '.join(dict.fromkeys(related))}")
+
+        return '\n'.join(lines) if len(lines) > 1 else ''
 
     def _chroma_search(self, vulnerability):
         """

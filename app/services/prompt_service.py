@@ -60,7 +60,8 @@ class PromptBuilder:
     "possible_attack": "可能的攻击方式和步骤",
     "impact": "漏洞影响范围和危害",
     "fix_solution": "具体的修复方案和代码示例",
-    "security_advice": "安全加固建议和最佳实践"
+    "security_advice": "安全加固建议和最佳实践",
+    "references": ["引用的CVE/CWE/OWASP编号, 如 CVE-2024-1234, 无则留空数组"]
 }}""",
 
         'scan_analysis': """你是一名网络安全专家。
@@ -213,7 +214,7 @@ class PromptBuilder:
         """构建自定义分析Prompt
 
         scene: general(通用) / code(代码审计) / log(日志分析) /
-               config(配置审查) / phishing(钓鱼研判)
+               config(配置审查) / phishing(钓鱼研���)
         不同场景附加针对性的分析维度提示, 让模型输出更聚焦。
         """
         if len(input_data) > 5000:
@@ -384,13 +385,14 @@ class PromptBuilder:
     "possible_attack": "SQL注入攻击步骤和Payload示例",
     "impact": "数据泄露和权限提升风险",
     "fix_solution": "参数化查询/预编译语句/WAF规则等修复方案(附代码示例)",
-    "security_advice": "数据库安全加固建议"
+    "security_advice": "数据库安全加固建议",
+    "references": ["引用的CVE/CWE/OWASP编号, 如 CWE-89, 无则留空数组"]
 }}""",
                 'variables': json.dumps({
                     'vulnerability_name': '漏洞名称', 'vulnerability_description': '漏洞描述',
                     'vulnerability_category': '漏洞分类', 'vulnerability_severity': '严重程度',
                     'rag_context': '参考资料', 'scan_results': '扫描结果',
-                    'target': '扫描目标', 'dvwa_level': 'DVWA等级', 'experiment_name': '实验名称',
+                    'target': '扫描目标', 'dvwa_level': 'DVWA等级', 'experiment_name': '实验��称',
                 }, ensure_ascii=False),
             },
             'vuln_xss': {
@@ -430,7 +432,8 @@ class PromptBuilder:
     "possible_attack": "XSS攻击Payload和注入方式",
     "impact": "Cookie窃取/钓鱼/蠕虫传播等危害",
     "fix_solution": "输出编码/HttpOnly/CSP策略修复方案(附代码示例)",
-    "security_advice": "前端安全加固和Content-Security-Policy建议"
+    "security_advice": "前端安全加固和Content-Security-Policy建议",
+    "references": ["引用的CVE/CWE/OWASP编号, 如 CWE-79, 无则留空数组"]
 }}""",
                 'variables': json.dumps({
                     'vulnerability_name': '漏洞名称', 'vulnerability_description': '漏洞描述',
@@ -476,7 +479,8 @@ class PromptBuilder:
     "possible_attack": "绕过上传验证的攻击方式和Payload",
     "impact": "WebShell/远程代码执行/服务器控制风险",
     "fix_solution": "安全上传实现(白名单验证/随机文件名/隔离存储)(附代码示例)",
-    "security_advice": "文件存储和Web服务器安全配置建议"
+    "security_advice": "文件存储和Web服务器安全配置建议",
+    "references": ["引用的CVE/CWE/OWASP编号, 如 CWE-434, 无则留空数组"]
 }}""",
                 'variables': json.dumps({
                     'vulnerability_name': '漏洞名称', 'vulnerability_description': '漏洞描述',
@@ -522,7 +526,8 @@ class PromptBuilder:
     "possible_attack": "命令注入Payload和链接符号利用",
     "impact": "远程代码执行/系统控制/数据泄露风险",
     "fix_solution": "安全替代方案(避免shell调用/参数白名单/最小权限)(附代码示例)",
-    "security_advice": "系统安全加固和最小权限原则建议"
+    "security_advice": "系统安全加固和最小权限原则建议",
+    "references": ["引用的CVE/CWE/OWASP编号, 如 CWE-78, 无则留空数组"]
 }}""",
                 'variables': json.dumps({
                     'vulnerability_name': '漏洞名称', 'vulnerability_description': '漏洞描述',
