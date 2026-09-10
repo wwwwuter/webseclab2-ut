@@ -89,6 +89,22 @@ html[data-bs-theme="light"] body {
 .soc-nav .nav-link.admin:hover { background: rgba(220,38,38,.14); color: #fecaca; }
 .soc-nav .nav-link.admin.active { background: rgba(220,38,38,.2); border-left-color: #ef4444; color: #fff; }
 
+/* ---------- 导航分组 (可折叠) ---------- */
+.soc-nav .nav-group { margin-bottom: .35rem; }
+.soc-nav .nav-group-toggle {
+  display: flex; align-items: center; justify-content: space-between;
+  width: 100%; background: none; border: 0; cursor: pointer;
+  color: var(--soc-sidebar-muted); font-size: .72rem; font-weight: 600;
+  letter-spacing: .06em; text-transform: uppercase;
+  padding: .45rem .8rem .35rem; margin-top: .35rem;
+  transition: var(--soc-transition);
+}
+.soc-nav .nav-group-toggle:hover { color: #e2e8f0; }
+.soc-nav .nav-group-toggle i { font-size: .8rem; transition: transform .2s ease; }
+.soc-nav .nav-group.collapsed .nav-group-toggle i { transform: rotate(-90deg); }
+.soc-nav .nav-group-items { overflow: hidden; max-height: 500px; transition: max-height .25s ease; }
+.soc-nav .nav-group.collapsed .nav-group-items { max-height: 0; }
+
 .soc-sidebar .sidebar-footer {
   padding: .8rem 1rem; border-top: 1px solid rgba(255,255,255,.08);
   font-size: .72rem; color: var(--soc-sidebar-muted);

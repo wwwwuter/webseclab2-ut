@@ -29,38 +29,70 @@
         </a>
         <nav class="soc-nav">
             {% if current_user.is_authenticated %}
-            <a class="nav-link {% if request.blueprint == 'main' and request.endpoint != 'main.admin_panel' %}active{% endif %}" href="{{ url_for('main.index') }}">
-                <i class="bi bi-grid-1x2"></i> 安全态势
-            </a>
-            <a class="nav-link {% if request.blueprint == 'exp' %}active{% endif %}" href="{{ url_for('exp.exp_list') }}">
-                <i class="bi bi-flask"></i> 漏洞实验
-            </a>
-            <a class="nav-link {% if request.blueprint == 'vuln' %}active{% endif %}" href="{{ url_for('vuln.vuln_list') }}">
-                <i class="bi bi-book"></i> 漏洞库
-            </a>
-            <a class="nav-link {% if request.blueprint == 'scan' %}active{% endif %}" href="{{ url_for('scan.scan_list') }}">
-                <i class="bi bi-radar"></i> 资产扫描
-            </a>
-            <a class="nav-link {% if request.blueprint == 'ai' %}active{% endif %}" href="{{ url_for('ai.ai_history') }}">
-                <i class="bi bi-robot"></i> AI 分析
-            </a>
-            <a class="nav-link {% if request.blueprint == 'kg' %}active{% endif %}" href="{{ url_for('kg.graph_view') }}">
-                <i class="bi bi-diagram-3"></i> 知识图谱
-            </a>
-            <a class="nav-link {% if request.blueprint == 'report' %}active{% endif %}" href="{{ url_for('report.report_list') }}">
-                <i class="bi bi-file-earmark-pdf"></i> 报告中心
-            </a>
-            <a class="nav-link {% if request.blueprint == 'risk' %}active{% endif %}" href="{{ url_for('risk.risk_list') }}">
-                <i class="bi bi-shield-check"></i> 风险评估
-            </a>
-            <a class="nav-link {% if request.blueprint == 'profile' %}active{% endif %}" href="{{ url_for('profile.index') }}">
-                <i class="bi bi-person-circle"></i> 个人中心
-            </a>
-            {% if current_user.is_admin() %}
-            <a class="nav-link admin {% if request.endpoint == 'main.admin_panel' %}active{% endif %}" href="{{ url_for('main.admin_panel') }}">
-                <i class="bi bi-gear-fill"></i> 管理中心
-            </a>
-            {% endif %}
+            <!-- 总览 -->
+            <div class="nav-group" data-group="overview">
+                <button class="nav-group-toggle" type="button" aria-expanded="true">
+                    <span>总览</span><i class="bi bi-chevron-down"></i>
+                </button>
+                <div class="nav-group-items">
+                    <a class="nav-link {% if request.blueprint == 'main' and request.endpoint != 'main.admin_panel' %}active{% endif %}" href="{{ url_for('main.index') }}">
+                        <i class="bi bi-grid-1x2"></i> 安全态势
+                    </a>
+                </div>
+            </div>
+            <!-- 漏洞 -->
+            <div class="nav-group" data-group="vuln">
+                <button class="nav-group-toggle" type="button" aria-expanded="true">
+                    <span>漏洞</span><i class="bi bi-chevron-down"></i>
+                </button>
+                <div class="nav-group-items">
+                    <a class="nav-link {% if request.blueprint == 'vuln' %}active{% endif %}" href="{{ url_for('vuln.vuln_list') }}">
+                        <i class="bi bi-book"></i> 漏洞库
+                    </a>
+                    <a class="nav-link {% if request.blueprint == 'exp' %}active{% endif %}" href="{{ url_for('exp.exp_list') }}">
+                        <i class="bi bi-flask"></i> 漏洞实验
+                    </a>
+                    <a class="nav-link {% if request.blueprint == 'kg' %}active{% endif %}" href="{{ url_for('kg.graph_view') }}">
+                        <i class="bi bi-diagram-3"></i> 知识图谱
+                    </a>
+                </div>
+            </div>
+            <!-- 运营 -->
+            <div class="nav-group" data-group="ops">
+                <button class="nav-group-toggle" type="button" aria-expanded="true">
+                    <span>运营</span><i class="bi bi-chevron-down"></i>
+                </button>
+                <div class="nav-group-items">
+                    <a class="nav-link {% if request.blueprint == 'scan' %}active{% endif %}" href="{{ url_for('scan.scan_list') }}">
+                        <i class="bi bi-radar"></i> 资产扫描
+                    </a>
+                    <a class="nav-link {% if request.blueprint == 'risk' %}active{% endif %}" href="{{ url_for('risk.risk_list') }}">
+                        <i class="bi bi-shield-check"></i> 风险评估
+                    </a>
+                    <a class="nav-link {% if request.blueprint == 'ai' %}active{% endif %}" href="{{ url_for('ai.ai_history') }}">
+                        <i class="bi bi-robot"></i> AI 分析
+                    </a>
+                    <a class="nav-link {% if request.blueprint == 'report' %}active{% endif %}" href="{{ url_for('report.report_list') }}">
+                        <i class="bi bi-file-earmark-pdf"></i> 报告中心
+                    </a>
+                </div>
+            </div>
+            <!-- 系统 -->
+            <div class="nav-group" data-group="system">
+                <button class="nav-group-toggle" type="button" aria-expanded="true">
+                    <span>系统</span><i class="bi bi-chevron-down"></i>
+                </button>
+                <div class="nav-group-items">
+                    <a class="nav-link {% if request.blueprint == 'profile' %}active{% endif %}" href="{{ url_for('profile.index') }}">
+                        <i class="bi bi-person-circle"></i> 个人中心
+                    </a>
+                    {% if current_user.is_admin() %}
+                    <a class="nav-link admin {% if request.endpoint == 'main.admin_panel' %}active{% endif %}" href="{{ url_for('main.admin_panel') }}">
+                        <i class="bi bi-gear-fill"></i> 管理中心
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
             {% else %}
             <a class="nav-link {% if request.endpoint == 'auth.login' %}active{% endif %}" href="{{ url_for('auth.login') }}">
                 <i class="bi bi-box-arrow-in-right"></i> 登录
@@ -164,6 +196,33 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     if (backdrop) backdrop.addEventListener('click', closeSidebar);
+
+    // ==================== 导航分组折叠 ====================
+    var groups = document.querySelectorAll('.soc-nav .nav-group');
+    var STORAGE_KEY = 'soc-nav-group';
+    var saved = {};
+    try { saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); } catch (e) { saved = {}; }
+
+    groups.forEach(function(group) {
+        var name = group.getAttribute('data-group');
+        var toggle = group.querySelector('.nav-group-toggle');
+        var items = group.querySelector('.nav-group-items');
+        var hasActive = group.querySelector('.nav-link.active');
+
+        // 恢复折叠状态: 默认展开; 若保存为折叠则折叠; 激活模块所在分组强制展开
+        var collapsed = saved[name] === 'collapsed' && !hasActive;
+        group.classList.toggle('collapsed', collapsed);
+        if (toggle) toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+
+        if (toggle) {
+            toggle.addEventListener('click', function() {
+                var isCollapsed = group.classList.toggle('collapsed');
+                toggle.setAttribute('aria-expanded', isCollapsed ? 'false' : 'true');
+                saved[name] = isCollapsed ? 'collapsed' : 'expanded';
+                try { localStorage.setItem(STORAGE_KEY, JSON.stringify(saved)); } catch (e) {}
+            });
+        }
+    });
 });
 
 // 全局 showNotification 函数: 供 HTMX 响应和 JS 调用

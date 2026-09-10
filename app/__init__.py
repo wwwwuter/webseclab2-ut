@@ -267,6 +267,18 @@ def _ensure_ai_analysis_schema():
             except Exception as e:
                 if 'duplicate' not in str(e).lower():
                     raise
+
+        if 'references' not in db_cols:
+            try:
+                db.session.execute(
+                    text('ALTER TABLE ai_analyses ADD COLUMN "references" TEXT DEFAULT \'\'')
+                )
+                db.session.commit()
+                db.engine.dispose()
+                log.info('[migration] 已添加 ai_analyses.references')
+            except Exception as e:
+                if 'duplicate' not in str(e).lower():
+                    raise
     except Exception as e:
         log.error('[migration] ai_analyses 表结构同步失败: %s', e, exc_info=True)
 
