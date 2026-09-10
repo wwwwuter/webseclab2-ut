@@ -13,8 +13,19 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import cm, mm
 from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer,
                                  Table, TableStyle, PageBreak, HRFlowable)
+from reportlab.platypus.tableofcontents import TableOfContents
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
+
+# ==================== 商务蓝配色 ====================
+COLOR_PRIMARY = colors.HexColor('#1F4E79')      # 深蓝: 标题/表头/封面色块
+COLOR_SECONDARY = colors.HexColor('#2E75B6')    # 中蓝: 章节色条/装饰线
+COLOR_LIGHT = colors.HexColor('#DEEBF7')        # 浅蓝: 表头底/封面装饰带
+COLOR_ACCENT = colors.HexColor('#C00000')       # 红: 风险等级/警示
+COLOR_TEXT = colors.HexColor('#333333')         # 正文
+COLOR_TEXT_MUTED = colors.HexColor('#666666')   # 次要文字
+COLOR_ZEBRA = colors.HexColor('#F2F7FC')        # 表格斑马纹
+COLOR_BORDER = colors.HexColor('#B4C7E7')       # 表格边框
 
 # 尝试注册中文字体
 _FONT_REGISTERED = False
@@ -89,64 +100,71 @@ class PDFGenerator:
             doc = SimpleDocTemplate(
                 filepath,
                 pagesize=A4,
-                topMargin=2 * cm,
-                bottomMargin=2 * cm,
+                topMargin=2.2 * cm,
+                bottomMargin=2.2 * cm,
                 leftMargin=2 * cm,
-                rightMargin=2 * cm
+                rightMargin=2 * cm,
+                onPage=lambda canvas, d: self._on_page(canvas, d, 'Web安全实验报告')
             )
 
             styles = self._get_styles()
             story = []
 
+            # 目录收集回调
+            def after_flowable(flowable):
+                text = getattr(flowable, '_toc_text', None)
+                if text:
+                    doc.notify('TOCEntry', (0, text, doc.page))
+            doc.afterFlowable = after_flowable
+
             # ===== 封面 =====
             story.extend(self._build_cover(experiment, user))
             story.append(PageBreak())
 
+            # ===== 目录 =====
+            story.extend(self._build_toc())
+            story.append(PageBreak())
+
             # ===== 一、实验基本信息 =====
-            story.append(Paragraph('一、实验基本信息', styles['Heading1']))
+            story.append(self._section_heading('一、实验基本信息'))
             story.append(Spacer(1, 10))
             story.extend(self._build_experiment_info(experiment, user))
             story.append(Spacer(1, 15))
 
             # ===== 二、漏洞信息 =====
             if vulnerability:
-                story.append(HRFlowable(width='100%', color=colors.grey))
-                story.append(Paragraph('二、漏洞信息', styles['Heading1']))
+                story.append(self._section_heading('二、漏洞信息'))
                 story.append(Spacer(1, 10))
                 story.extend(self._build_vulnerability_info(vulnerability))
                 story.append(Spacer(1, 15))
 
             # ===== 三、实验过程 =====
-            story.append(HRFlowable(width='100%', color=colors.grey))
-            story.append(Paragraph('三、实验过程', styles['Heading1']))
+            story.append(self._section_heading('三、实验过程'))
             story.append(Spacer(1, 10))
             story.extend(self._build_experiment_process(experiment))
             story.append(Spacer(1, 15))
 
             # ===== 四、扫描结果 =====
             if scan_results:
-                story.append(HRFlowable(width='100%', color=colors.grey))
-                story.append(Paragraph('四、扫描结果', styles['Heading1']))
+                story.append(self._section_heading('四、扫描结果'))
                 story.append(Spacer(1, 10))
                 story.extend(self._build_scan_results(scan_results))
                 story.append(Spacer(1, 15))
 
             # ===== 五、AI智能分析 =====
             if ai_analysis and ai_analysis.status == 'completed':
-                story.append(HRFlowable(width='100%', color=colors.grey))
-                story.append(Paragraph('五、AI智能分析', styles['Heading1']))
+                story.append(self._section_heading('五、AI智能分析'))
                 story.append(Spacer(1, 10))
                 story.extend(self._build_ai_analysis(ai_analysis))
                 story.append(Spacer(1, 15))
 
             # ===== 六、安全总结 =====
-            story.append(HRFlowable(width='100%', color=colors.grey))
-            story.append(Paragraph('六、安全总结', styles['Heading1']))
+            story.append(self._section_heading('六、安全总结'))
             story.append(Spacer(1, 10))
             story.extend(self._build_security_summary(experiment, vulnerability, ai_analysis))
 
-            # 构建PDF
-            doc.build(story)
+            # 构建PDF (multiBuild 支持目录两遍构建)
+            doc.multiBuild(story)
 
             file_size = os.path.getsize(filepath)
             return filename, file_size, None
@@ -177,11 +195,19 @@ class PDFGenerator:
         try:
             doc = SimpleDocTemplate(
                 filepath, pagesize=A4,
-                topMargin=2 * cm, bottomMargin=2 * cm,
+                topMargin=2.2 * cm, bottomMargin=2.2 * cm,
                 leftMargin=2 * cm, rightMargin=2 * cm,
+                onPage=lambda canvas, d: self._on_page(canvas, d, 'AI Agent 安全分析报告')
             )
             styles = self._get_styles()
             story = []
+
+            # 目录收集回调
+            def after_flowable(flowable):
+                text = getattr(flowable, '_toc_text', None)
+                if text:
+                    doc.notify('TOCEntry', (0, text, doc.page))
+            doc.afterFlowable = after_flowable
 
             tool_names = plan_data.get('tools_executed') or plan_data.get('planned_tools') or []
             results = plan_data.get('results', {})
@@ -204,63 +230,58 @@ class PDFGenerator:
             story.extend(self._build_mcp_cover(plan_data, user, total_ms))
             story.append(PageBreak())
 
+            # ===== 目录 =====
+            story.extend(self._build_toc())
+            story.append(PageBreak())
+
             # ===== 一、分析概览 =====
-            story.append(Paragraph('一、分析概览', styles['Heading1']))
+            story.append(self._section_heading('一、分析概览'))
             story.append(Spacer(1, 10))
             story.extend(self._build_mcp_overview(tool_names, total_ms, plan_data))
             story.append(Spacer(1, 15))
 
             # ===== 二、工具调用记录 =====
             if exec_log:
-                story.append(HRFlowable(width='100%', color=colors.grey))
-                story.append(Paragraph('二、工具调用记录', styles['Heading1']))
+                story.append(self._section_heading('二、工具调用记录'))
                 story.append(Spacer(1, 10))
                 story.extend(self._build_mcp_tool_log(exec_log))
                 story.append(Spacer(1, 15))
 
             # ===== 三、扫描结果 =====
             if ports:
-                story.append(HRFlowable(width='100%', color=colors.grey))
-                story.append(Paragraph('三、端口扫描结果', styles['Heading1']))
+                story.append(self._section_heading('三、端口扫描结果'))
                 story.append(Spacer(1, 10))
                 story.extend(self._build_mcp_scan_results(ports, s_data))
                 story.append(Spacer(1, 15))
 
             # ===== 四、风险评估 =====
             if r_data:
-                story.append(HRFlowable(width='100%', color=colors.grey))
-                story.append(Paragraph('四、风险评估', styles['Heading1']))
+                story.append(self._section_heading('四、风险评估'))
                 story.append(Spacer(1, 10))
                 story.extend(self._build_mcp_risk(r_data))
                 story.append(Spacer(1, 15))
 
             # ===== 五、漏洞详情 =====
             if vulns:
-                story.append(HRFlowable(width='100%', color=colors.grey))
-                story.append(Paragraph('五、漏洞详情', styles['Heading1']))
+                story.append(self._section_heading('五、漏洞详情'))
                 story.append(Spacer(1, 10))
                 story.extend(self._build_mcp_vulns(vulns, styles))
                 story.append(Spacer(1, 15))
 
             # ===== 六、AI 综合分析 =====
-            story.append(HRFlowable(width='100%', color=colors.grey))
-            story.append(Paragraph('六、AI 综合分析', styles['Heading1']))
+            story.append(self._section_heading('六、AI 综合分析'))
             story.append(Spacer(1, 10))
             story.extend(self._build_mcp_ai_summary(ports, vulns, r_data, d_data, styles))
             story.append(Spacer(1, 15))
 
             # ===== 七、修复建议 =====
             if vulns:
-                story.append(HRFlowable(width='100%', color=colors.grey))
-                story.append(Paragraph('七、修复建议', styles['Heading1']))
+                story.append(self._section_heading('七、修复建议'))
                 story.append(Spacer(1, 10))
                 story.extend(self._build_mcp_fix_advice(vulns, styles))
                 story.append(Spacer(1, 15))
 
-            # ===== 页脚 =====
-            story.extend(self._build_mcp_footer())
-
-            doc.build(story)
+            doc.multiBuild(story)
             file_size = os.path.getsize(filepath)
             return filename, file_size, None
 
@@ -270,13 +291,29 @@ class PDFGenerator:
             return '', 0, f'PDF生成失败: {str(e)}'
 
     def _build_mcp_cover(self, plan_data, user, total_ms):
-        """MCP 报告封面"""
+        """MCP 报告封面 (品牌化)"""
         styles = self._get_styles()
         elements = []
-        elements.append(Spacer(1, 80))
+
+        # 顶部品牌色块横条
+        brand_bar = Table([['']], colWidths=[16 * cm], rowHeights=[0.5 * cm])
+        brand_bar.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, -1), COLOR_PRIMARY),
+            ('LEFTPADDING', (0, 0), (-1, -1), 0),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+            ('TOPPADDING', (0, 0), (-1, -1), 0),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+        ]))
+        elements.append(brand_bar)
+        elements.append(Spacer(1, 60))
+
         elements.append(Paragraph('WebSecLab', styles['CNTitle']))
         elements.append(Paragraph('AI Agent 安全分析报告', styles['CNTitle']))
-        elements.append(Spacer(1, 30))
+        elements.append(Spacer(1, 10))
+
+        # 装饰线条
+        elements.append(HRFlowable(width='40%', thickness=2, color=COLOR_SECONDARY,
+                                   spaceBefore=6, spaceAfter=20, hAlign='CENTER'))
 
         query = plan_data.get('query', '')
         if query:
@@ -296,10 +333,19 @@ class PDFGenerator:
             ('FONTNAME', (0, 0), (-1, -1), _FONT_NAME),
             ('FONTSIZE', (0, 0), (-1, -1), 11),
             ('ALIGN', (0, 0), (0, -1), 'RIGHT'),
-            ('TEXTCOLOR', (0, 0), (0, -1), colors.grey),
+            ('TEXTCOLOR', (0, 0), (0, -1), COLOR_TEXT_MUTED),
+            ('TEXTCOLOR', (1, 0), (1, -1), COLOR_TEXT),
             ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
         ]))
         elements.append(info_table)
+        elements.append(Spacer(1, 40))
+
+        # 底部版权条
+        elements.append(HRFlowable(width='100%', thickness=0.5, color=COLOR_BORDER,
+                                   spaceBefore=10, spaceAfter=8))
+        elements.append(Paragraph(
+            '本报告由 WebSecLab AI Agent 自动生成，仅供安全学习与研究使用',
+            styles['CNSubTitle']))
         return elements
 
     def _build_mcp_overview(self, tool_names, total_ms, plan_data):
@@ -463,31 +509,18 @@ class PDFGenerator:
                     f'<b>{v["name"]}:</b> {v["solution"][:200]}', styles['CNBody']))
         return elements
 
-    def _build_mcp_footer(self):
-        """MCP 报告页脚"""
-        styles = self._get_styles()
-        elements = [
-            Spacer(1, 20),
-            HRFlowable(width='100%', color=colors.grey),
-            Spacer(1, 5),
-            Paragraph(
-                f'报告由 WebSecLab AI Agent 自动生成 | {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}',
-                styles['CNSubTitle'],
-            ),
-        ]
-        return elements
-
     def _get_styles(self):
-        """获取PDF样式"""
+        """获取PDF样式 (商务蓝主题)"""
         styles = getSampleStyleSheet()
 
         styles.add(ParagraphStyle(
             name='CNTitle',
             fontName=_FONT_NAME_BOLD,
-            fontSize=22,
+            fontSize=24,
             alignment=1,  # center
             spaceAfter=20,
-            spaceBefore=40
+            spaceBefore=40,
+            textColor=COLOR_PRIMARY
         ))
 
         styles.add(ParagraphStyle(
@@ -496,7 +529,7 @@ class PDFGenerator:
             fontSize=14,
             alignment=1,
             spaceAfter=10,
-            textColor=colors.grey
+            textColor=COLOR_TEXT_MUTED
         ))
 
         styles.add(ParagraphStyle(
@@ -504,7 +537,8 @@ class PDFGenerator:
             fontName=_FONT_NAME,
             fontSize=10,
             leading=16,
-            spaceAfter=6
+            spaceAfter=6,
+            textColor=COLOR_TEXT
         ))
 
         styles.add(ParagraphStyle(
@@ -513,35 +547,134 @@ class PDFGenerator:
             fontSize=12,
             spaceAfter=8,
             spaceBefore=12,
-            textColor=colors.HexColor('#2c3e50')
+            textColor=COLOR_PRIMARY
         ))
 
-        # 覆盖Heading1
+        # 目录页标题
+        styles.add(ParagraphStyle(
+            name='TOCTitle',
+            fontName=_FONT_NAME_BOLD,
+            fontSize=18,
+            alignment=1,
+            spaceAfter=20,
+            spaceBefore=20,
+            textColor=COLOR_PRIMARY
+        ))
+
+        # 覆盖Heading1 (章节标题, 深蓝)
         styles['Heading1'].fontName = _FONT_NAME_BOLD
-        styles['Heading1'].fontSize = 14
-        styles['Heading1'].textColor = colors.HexColor('#2c3e50')
-        styles['Heading1'].spaceBefore = 12
-        styles['Heading1'].spaceAfter = 8
+        styles['Heading1'].fontSize = 15
+        styles['Heading1'].textColor = COLOR_PRIMARY
+        styles['Heading1'].spaceBefore = 16
+        styles['Heading1'].spaceAfter = 10
 
         styles['Normal'].fontName = _FONT_NAME
         styles['Normal'].fontSize = 10
         styles['Normal'].leading = 16
+        styles['Normal'].textColor = COLOR_TEXT
 
         return styles
 
-    def _build_cover(self, experiment, user):
-        """构建封面"""
+    def _section_heading(self, text):
+        """章节标题: 左侧蓝色色条 + 深蓝文字 (替代灰色横线)"""
+        styles = self._get_styles()
+        # 左侧色条 (用表格实现, 左列色条右列标题)
+        bar = Table([['', Paragraph(text, styles['Heading1'])]],
+                    colWidths=[0.2 * cm, 15.8 * cm])
+        bar.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (0, 0), COLOR_SECONDARY),
+            ('BACKGROUND', (1, 0), (1, 0), colors.white),
+            ('LEFTPADDING', (0, 0), (0, 0), 0),
+            ('RIGHTPADDING', (0, 0), (0, 0), 0),
+            ('LEFTPADDING', (1, 0), (1, 0), 8),
+            ('RIGHTPADDING', (1, 0), (1, 0), 0),
+            ('TOPPADDING', (0, 0), (-1, -1), 2),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ]))
+        # 标记标题文本, 供 afterFlowable 收集到目录
+        bar._toc_text = text
+        return bar
+
+    def _build_toc(self):
+        """构建目录页 (TableOfContents)"""
         styles = self._get_styles()
         elements = []
-        elements.append(Spacer(1, 80))
+        elements.append(Paragraph('目  录', styles['TOCTitle']))
+        elements.append(Spacer(1, 10))
+
+        toc = TableOfContents()
+        toc.levelStyles = [
+            ParagraphStyle(
+                name='TOCEntry',
+                fontName=_FONT_NAME,
+                fontSize=11,
+                leading=24,
+                leftIndent=0,
+                textColor=COLOR_TEXT,
+            )
+        ]
+        elements.append(toc)
+        elements.append(Spacer(1, 20))
+        elements.append(HRFlowable(width='100%', thickness=0.5, color=COLOR_BORDER))
+        return elements
+
+    def _on_page(self, canvas, doc, report_title):
+        """每页页眉页脚回调"""
+        canvas.saveState()
+
+        # 页眉: 左侧报告名, 右侧章节名, 细线分隔
+        header_text = report_title
+        canvas.setFont(_FONT_NAME, 8)
+        canvas.setFillColor(COLOR_TEXT_MUTED)
+        canvas.drawString(2 * cm, A4[1] - 1.2 * cm, header_text)
+        canvas.drawRightString(A4[0] - 2 * cm, A4[1] - 1.2 * cm, 'WebSecLab')
+        canvas.setStrokeColor(COLOR_BORDER)
+        canvas.setLineWidth(0.5)
+        canvas.line(2 * cm, A4[1] - 1.4 * cm, A4[0] - 2 * cm, A4[1] - 1.4 * cm)
+
+        # 页脚: 左侧生成时间, 右侧页码
+        canvas.setFont(_FONT_NAME, 8)
+        canvas.setFillColor(COLOR_TEXT_MUTED)
+        canvas.drawString(2 * cm, 1.2 * cm, datetime.now().strftime('%Y-%m-%d %H:%M'))
+        canvas.drawRightString(A4[0] - 2 * cm, 1.2 * cm, f'第 {doc.page} 页')
+        canvas.setStrokeColor(COLOR_BORDER)
+        canvas.setLineWidth(0.5)
+        canvas.line(2 * cm, 1.4 * cm, A4[0] - 2 * cm, 1.4 * cm)
+
+        canvas.restoreState()
+
+    def _build_cover(self, experiment, user):
+        """构建封面 (品牌化: 顶部色块 + 平台名 + 标题 + 装饰线 + 信息表 + 版权条)"""
+        styles = self._get_styles()
+        elements = []
+
+        # 顶部品牌色块横条
+        brand_bar = Table([['']], colWidths=[16 * cm], rowHeights=[0.5 * cm])
+        brand_bar.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, -1), COLOR_PRIMARY),
+            ('LEFTPADDING', (0, 0), (-1, -1), 0),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+            ('TOPPADDING', (0, 0), (-1, -1), 0),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+        ]))
+        elements.append(brand_bar)
+        elements.append(Spacer(1, 60))
+
+        # 平台名 + 报告标题
         elements.append(Paragraph('WebSecLab', styles['CNTitle']))
-        elements.append(Paragraph('Web安全实验报告', styles['CNTitle']))
-        elements.append(Spacer(1, 30))
+        elements.append(Paragraph('Web 安全实验报告', styles['CNTitle']))
+        elements.append(Spacer(1, 10))
+
+        # 装饰线条 (中蓝)
+        elements.append(HRFlowable(width='40%', thickness=2, color=COLOR_SECONDARY,
+                                   spaceBefore=6, spaceAfter=20, hAlign='CENTER'))
 
         title = experiment.experiment_name if experiment else '安全实验'
         elements.append(Paragraph(title, styles['CNSubTitle']))
-        elements.append(Spacer(1, 50))
+        elements.append(Spacer(1, 60))
 
+        # 信息表
         info_data = [
             ['实验用户', user.username if user else 'Unknown'],
             ['生成时间', datetime.now().strftime('%Y-%m-%d %H:%M')],
@@ -553,10 +686,19 @@ class PDFGenerator:
             ('FONTSIZE', (0, 0), (-1, -1), 11),
             ('ALIGN', (0, 0), (0, -1), 'RIGHT'),
             ('ALIGN', (1, 0), (1, -1), 'LEFT'),
-            ('TEXTCOLOR', (0, 0), (0, -1), colors.grey),
+            ('TEXTCOLOR', (0, 0), (0, -1), COLOR_TEXT_MUTED),
+            ('TEXTCOLOR', (1, 0), (1, -1), COLOR_TEXT),
             ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
         ]))
         elements.append(info_table)
+        elements.append(Spacer(1, 40))
+
+        # 底部版权条
+        elements.append(HRFlowable(width='100%', thickness=0.5, color=COLOR_BORDER,
+                                   spaceBefore=10, spaceAfter=8))
+        elements.append(Paragraph(
+            '本报告由 WebSecLab 平台自动生成，仅供安全学习与研究使用',
+            styles['CNSubTitle']))
         return elements
 
     def _build_experiment_info(self, experiment, user):
@@ -584,7 +726,7 @@ class PDFGenerator:
             ['漏洞名称', Paragraph(str(vulnerability.name), wrap_style)],
             ['CVE编号', Paragraph(str(getattr(vulnerability, 'cve', '') or '-'), wrap_style)],
             ['OWASP分类', Paragraph(str(vulnerability.owasp.name if getattr(vulnerability, 'owasp', None) else '-'), wrap_style)],
-            ['严重程度', Paragraph(str(vulnerability.severity or '-'), wrap_style)],
+            ['严��程度', Paragraph(str(vulnerability.severity or '-'), wrap_style)],
         ]
         elements.append(self._make_info_table(data))
 
@@ -701,32 +843,24 @@ class PDFGenerator:
             if ai_analysis.fix_solution:
                 summary_parts.append(f'建议: {ai_analysis.fix_solution[:200]}')
 
-        summary_parts.append('\n\n建议持续进行安全测试和漏洞修复，提升系统整体安全性。')
+        summary_parts.append('\\n\\n建议持续进行安全测试和漏洞修复，提升系统整体安全性。')
 
         elements.append(Paragraph(''.join(summary_parts), styles['CNBody']))
-
-        # 页脚信息
-        elements.append(Spacer(1, 30))
-        elements.append(HRFlowable(width='100%', color=colors.grey))
-        elements.append(Spacer(1, 5))
-        elements.append(Paragraph(
-            f'报告由 WebSecLab 平台自动生成 | {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}',
-            styles['CNSubTitle']
-        ))
 
         return elements
 
     def _make_info_table(self, data):
-        """创建信息表格"""
+        """创建信息表格 (浅蓝标签列 + 商务蓝边框)"""
         table = Table(data, colWidths=[4 * cm, 12 * cm])
         table.setStyle(TableStyle([
             ('FONTNAME', (0, 0), (-1, -1), _FONT_NAME),
             ('FONTSIZE', (0, 0), (-1, -1), 10),
-            ('BACKGROUND', (0, 0), (0, -1), colors.HexColor('#f8f9fa')),
-            ('TEXTCOLOR', (0, 0), (0, -1), colors.HexColor('#495057')),
+            ('BACKGROUND', (0, 0), (0, -1), COLOR_LIGHT),
+            ('TEXTCOLOR', (0, 0), (0, -1), COLOR_PRIMARY),
+            ('TEXTCOLOR', (1, 0), (1, -1), COLOR_TEXT),
             ('ALIGN', (0, 0), (0, -1), 'RIGHT'),
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#dee2e6')),
+            ('GRID', (0, 0), (-1, -1), 0.5, COLOR_BORDER),
             ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
             ('TOPPADDING', (0, 0), (-1, -1), 6),
             ('LEFTPADDING', (0, 0), (-1, -1), 8),
@@ -735,15 +869,15 @@ class PDFGenerator:
 
     @staticmethod
     def _get_table_style():
-        """获取数据表格样式"""
+        """获取数据表格样式 (深蓝表头白字 + 斑马纹)"""
         return TableStyle([
             ('FONTNAME', (0, 0), (-1, -1), _FONT_NAME),
             ('FONTSIZE', (0, 0), (-1, -1), 9),
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#343a40')),
+            ('BACKGROUND', (0, 0), (-1, 0), COLOR_PRIMARY),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#dee2e6')),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f8f9fa')]),
+            ('GRID', (0, 0), (-1, -1), 0.5, COLOR_BORDER),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, COLOR_ZEBRA]),
             ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
             ('TOPPADDING', (0, 0), (-1, -1), 5),
         ])
