@@ -33,7 +33,7 @@ class LLMPlanner:
     # 默认最大迭代轮数 (每轮最多调用一个工具)
     DEFAULT_MAX_ITERATIONS = 6
 
-    # 结构化输出 JSON schema (宽松: 仅 action 必填, 兼容 Ollama/OpenAI 两种后端)
+    # 结构化输出 JSON schema (宽松: 仅 action 必填)
     PLANNER_SCHEMA = {
         'type': 'object',
         'properties': {
@@ -122,20 +122,17 @@ class LLMPlanner:
     # ==================== LLM 后端 ====================
 
     def _build_llm(self, user_id=None):
-        """根据用户配置 (优先) 或全局配置构建 LLM 后端 (与 AIService 保持一致)"""
+        """根据用户配置 (优先) 或全局配置构建 LLM 后端 (统一 OpenAI 兼容 API)"""
         from app.services.llm_config_service import get_user_llm_config
+        from app.services.openai_service import OpenAICompatibleService
         cfg = get_user_llm_config(user_id)
 
-        if cfg['mode'] == 'api':
-            from app.services.openai_service import OpenAICompatibleService
-            return OpenAICompatibleService(
-                provider=cfg['provider'],
-                api_key=cfg['api_key'],
-                base_url=cfg['base_url'],
-                model=cfg['model'],
-            )
-        from app.services.ollama_service import OllamaService
-        return OllamaService()
+        return OpenAICompatibleService(
+            provider=cfg['provider'],
+            api_key=cfg['api_key'],
+            base_url=cfg['base_url'],
+            model=cfg['model'],
+        )
 
     # ==================== Prompt 构建 ====================
 

@@ -1,7 +1,7 @@
 """
 AI分析模块测试
-覆盖: AIService 业务逻辑、JSON解析、Ollama 可用性检测
-注意: 实际 Ollama 调用需要本地服务, 此处测试逻辑层 + 模拟
+覆盖: AIService 业务逻辑、JSON解析、API 可用性检测
+注意: 实际 API 调用需要外部服务, 此处测试逻辑层 + 模拟
 """
 
 import pytest
@@ -82,23 +82,27 @@ class TestAIServiceUnit:
             AIService._apply_parsed_result(analysis, parsed)
             assert analysis.risk_level == 'Medium'
 
-    @patch('app.services.ollama_service.requests.get')
-    def test_ollama_availability(self, mock_get, app, db):
-        """Ollama 可用性检测"""
-        from app.services.ollama_service import OllamaService
+    @patch('app.services.openai_service.requests.get')
+    def test_api_availability(self, mock_get, app, db):
+        """OpenAI 兼容 API 可用性检测 (未配置 Key 视为不可用)"""
+        from app.services.openai_service import OpenAICompatibleService
+        OpenAICompatibleService.clear_cache()
 
-        # 模拟可用
+        # 未配置 API Key -> 不可用 (不发请求)
+        assert OpenAICompatibleService(api_key='').is_available() is False
+
+        # 配置 Key 且 /models 返回 200 -> 可用
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_get.return_value = mock_resp
-
-        svc = OllamaService()
+        svc = OpenAICompatibleService(provider='deepseek', api_key='sk-test')
         assert svc.is_available() is True
 
-        # 模拟不可用 (使用 requests.ConnectionError); 先清空缓存以绕过 TTL
-        OllamaService.clear_cache()
+        # 连接失败 -> 不可用 (清缓存以绕过 TTL)
+        OpenAICompatibleService.clear_cache()
         mock_get.side_effect = req_lib.ConnectionError('Connection refused')
         assert svc.is_available() is False
+        OpenAICompatibleService.clear_cache()
 
 
 class TestAIRoutes:

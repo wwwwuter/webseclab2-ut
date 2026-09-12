@@ -1,7 +1,7 @@
 """
 AI分析主服务模块
-整合Ollama/OpenAI兼容API、PromptBuilder、RAG服务，实现完整的AI漏洞分析流程
-支持双模式: LLM_MODE=ollama (本地) 或 LLM_MODE=api (云端DeepSeek/DashScope/OpenAI)
+整合 OpenAI 兼容 API、PromptBuilder、RAG 服务，实现完整的 AI 漏洞分析流程
+AI 后端统一为 OpenAI 兼容 API (DeepSeek/DashScope/OpenAI 等)，由用户配置 API Key
 新增: 流式分析支持 (prepare + stream 分离)
 """
 
@@ -15,7 +15,6 @@ from app.models.ai_analysis import AIAnalysis
 from app.models.experiment import Experiment
 from app.models.scan import ScanTask, ScanResult
 from app.models.vulnerability import Vulnerability
-from app.services.ollama_service import OllamaService
 from app.services.openai_service import OpenAICompatibleService
 from app.services.prompt_service import PromptBuilder
 from app.services.rag_service import RAGService
@@ -26,7 +25,7 @@ logger = logging.getLogger(__name__)
 class AIService:
     """AI漏洞分析主服务类"""
 
-    # 分析结果结构化输出 JSON schema (六字段 + 引用来源, 兼容 Ollama/OpenAI 两种后端)
+    # 分析结果结构化输出 JSON schema (六字段 + 引用来源)
     ANALYSIS_SCHEMA = {
         'type': 'object',
         'properties': {
@@ -51,18 +50,16 @@ class AIService:
         self.llm = self._build_llm_from_config(user_id, model)
 
     def _build_llm_from_config(self, user_id=None, model=None):
-        """根据用户配置 (优先) 或全局配置构建 LLM 后端"""
+        """根据用户配置 (优先) 或全局配置构建 LLM 后端 (统一 OpenAI 兼容 API)"""
         from app.services.llm_config_service import get_user_llm_config
         cfg = get_user_llm_config(user_id)
 
-        if cfg['mode'] == 'api':
-            return OpenAICompatibleService(
-                provider=cfg['provider'],
-                api_key=cfg['api_key'],
-                base_url=cfg['base_url'],
-                model=cfg['model'],
-            )
-        return OllamaService(model=model or 'qwen2.5:7b')
+        return OpenAICompatibleService(
+            provider=cfg['provider'],
+            api_key=cfg['api_key'],
+            base_url=cfg['base_url'],
+            model=model or cfg['model'],
+        )
 
     def _ensure_llm_for_user(self, user_id):
         """确保 self.llm 是按指定用户配置构建的 (用户切换时重建)"""
@@ -165,7 +162,7 @@ class AIService:
     def _create_stream_generator(self, analysis, prompt, model_name):
         """
         创建SSE流式生成器
-        将 Ollama 的 token 流封装为 SSE 事件格式:
+        将 LLM 的 token 流封装为 SSE 事件格式:
           data: {"type":"token","content":"xxx"}
           data: {"type":"done","analysis_id":123}
           data: {"type":"error","message":"xxx"}

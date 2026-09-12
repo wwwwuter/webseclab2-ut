@@ -183,7 +183,6 @@ def api_get_ai_config():
     user = current_user
     has_key = bool(user.llm_api_key_encrypted)
     return jsonify(ok=True, config={
-        'mode': user.llm_mode or '',
         'provider': user.llm_api_provider or '',
         'api_key_masked': mask_api_key(
             decrypt_api_key(user.llm_api_key_encrypted)) if has_key else '',
@@ -210,19 +209,14 @@ def api_save_ai_config():
         db.session.commit()
         return jsonify(ok=True, msg='已清除配置，将使用系统全局配置')
 
-    mode = (data.get('mode') or '').strip()
-    if mode not in ('ollama', 'api'):
-        return jsonify(ok=False, msg='模式无效')
-
     provider = (data.get('provider') or '').strip()
-    if mode == 'api' and provider and provider not in ALLOWED_LLM_PROVIDERS:
+    if provider and provider not in ALLOWED_LLM_PROVIDERS:
         return jsonify(ok=False, msg='提供商无效')
 
     base_url = (data.get('base_url') or '').strip()
     model = (data.get('model') or '').strip()
     api_key = (data.get('api_key') or '').strip()
 
-    user.llm_mode = mode
     user.llm_api_provider = provider or None
     user.llm_api_base_url = base_url or None
     user.llm_api_model = model or None

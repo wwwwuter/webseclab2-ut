@@ -44,7 +44,7 @@ def ai_history():
         sort_by=sort_by,
         order=order
     )
-    ollama_available = ai.is_available()
+    ai_available = ai.is_available()
     stats = ai.get_user_statistics(current_user.id)
 
     if request.headers.get('HX-Request'):
@@ -56,7 +56,7 @@ def ai_history():
 
     return render_template('ai/history.html',
                            pagination=pagination,
-                           ollama_available=ollama_available,
+                           ai_available=ai_available,
                            stats=stats,
                            keyword=keyword, source=source,
                            risk_level=risk_level, status=status,
@@ -70,7 +70,7 @@ def ai_history():
 def ai_analyze_experiment(experiment_id):
     """基于实验执行AI分析 (SSE流式)"""
     if not _get_ai().is_available():
-        flash('Ollama服务未启动，请先运行: ollama serve', 'danger')
+        flash('未配置 AI 引擎，请到「个人中心 → AI 引擎配置」填写 API Key', 'danger')
         return redirect(url_for('ai.ai_history'))
 
     if request.method == 'POST':
@@ -114,7 +114,7 @@ def ai_analyze_experiment(experiment_id):
 def ai_analyze_scan(scan_task_id):
     """基于扫描任务执行AI分析 (SSE流式)"""
     if not _get_ai().is_available():
-        flash('Ollama服务未启动，请先运行: ollama serve', 'danger')
+        flash('未配置 AI 引擎，请到「个人中心 → AI 引擎配置」填写 API Key', 'danger')
         return redirect(url_for('ai.ai_history'))
 
     if request.method == 'POST':
@@ -154,7 +154,7 @@ def ai_analyze_scan(scan_task_id):
 def ai_custom():
     """自定义文本AI分析 (SSE流式)"""
     if not _get_ai().is_available():
-        flash('Ollama服务未启动，请先运行: ollama serve', 'danger')
+        flash('未配置 AI 引擎，请到「个人中心 → AI 引擎配置」填写 API Key', 'danger')
         return redirect(url_for('ai.ai_history'))
 
     if request.method == 'POST':

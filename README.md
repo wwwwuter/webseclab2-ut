@@ -15,7 +15,7 @@ WebSecLab 面向安全教学与攻防研究，将"漏洞知识库 → 实验复�
 | **实验管理** | 实验创建（关联漏洞）、实验步骤日志（时间线）、Token 一键复制、实验耗时统计、关联 AI 报告 |
 | **DVWA Hook 自动验证** | DVWA 靶场 Hook 上报实验事件（HMAC-SHA256 签名鉴权 + 时间戳防重放），按漏洞分类命中关键事件自动判定实验成功；人工提交为兜底 |
 | **安全扫描** | 融合 Socket 端口扫描与 Nmap 扫描；后台异步执行、进度轮询；结果持久化与历史列表 |
-| **AI 智能分析** | 支持本地 Ollama 或云端 API（DeepSeek / DashScope / OpenAI）；可配置 Prompt 模板；RAG 检索增强；分析历史管理 |
+| **AI 智能分析** | 基于 OpenAI 兼容 API（DeepSeek / DashScope / OpenAI）；在「个人中心」配置 API Key 即可用；可配置 Prompt 模板；RAG 检索增强；分析历史管理 |
 | **RAG 知识增强** | 基于 ChromaDB 向量库对漏洞知识做语义检索，自动拼接到分析 Prompt |
 | **知识图谱** | NetworkX 构建漏洞关联图谱（漏洞 / 分类 / OWASP / CVE / CWE / 修复方案 / 攻击方式），ECharts 力导向可视化，详情页内嵌 ego 子图 |
 | **风险评估** | 自有多因素风险评分引擎 `RiskEngine`（CVSS / 资产重要性 / 利用成功度 / 暴露面 / AI 置信度加权） |
@@ -32,7 +32,7 @@ WebSecLab 面向安全教学与攻防研究，将"漏洞知识库 → 实验复�
 - **ORM / 数据库**：Flask-SQLAlchemy + SQLite（开发/生产）
 - **认证 / 防护**：Flask-Login、Flask-WTF（CSRF 防护默认开启）、Werkzeug
 - **前端**：Jinja2 模板 + Bootstrap + **HTMX**（列表筛选/排序/分页局部刷新，无整页跳转）+ ECharts
-- **AI / 向量**：Ollama（本地 LLM）、OpenAI 兼容 API、ChromaDB（RAG 向量库）
+- **AI / 向量**：OpenAI 兼容 API（DeepSeek / DashScope / OpenAI 等）、ChromaDB（RAG 向量库）
 - **图谱 / 算法**：NetworkX（知识图谱）
 - **扫描**：原生 Socket 端口扫描 + Nmap（`python-nmap` 需系统安装 nmap）
 - **报告**：ReportLab（PDF）
@@ -55,9 +55,7 @@ pip install -r requirements.txt
 复制并编辑 `.env`（项目已内置 `.env`，可直接修改）：
 
 ```ini
-# LLM 接入方式: ollama (本地) 或 api (云端)
-LLM_MODE=ollama
-# 云端 API 提供商: deepseek / dashscope / openai
+# LLM 提供商: deepseek / dashscope / openai
 LLM_API_PROVIDER=deepseek
 LLM_API_KEY=your-api-key
 # LLM_API_BASE_URL=   # 留空使用提供商默认
@@ -100,9 +98,8 @@ python run.py
 |----------|--------|------|
 | `FLASK_ENV` | `default`（=development） | 运行环境：`development` / `testing` / `production` |
 | `SECRET_KEY` | 运行期随机生成（告警） | 会话签名密钥，生产环境必须固定设置 |
-| `LLM_MODE` | `ollama` | `ollama` 本地模型 或 `api` 云端模型 |
 | `LLM_API_PROVIDER` | `deepseek` | `deepseek` / `dashscope` / `openai` |
-| `LLM_API_KEY` | 空 | 云端 API 密钥 |
+| `LLM_API_KEY` | 空 | OpenAI 兼容 API 密钥（用户可在个人中心配置自己的） |
 | `LLM_API_BASE_URL` | 空（用提供商默认） | 自定义 API 基址（私有化部署用） |
 | `LLM_API_MODEL` | 空（用提供商默认） | 指定模型名 |
 | `SESSION_COOKIE_SECURE` | `false` | 生产 HTTPS 部署设为 `true` |
@@ -143,7 +140,7 @@ WebSecLab/
 │   ├── services/              # 业务逻辑层
 │   │   ├── auth_service.py / vulnerability_service.py / experiment_service.py
 │   │   ├── ai_service.py / prompt_service.py / rag_service.py / chroma_service.py
-│   │   ├── ollama_service.py / openai_service.py
+│   │   ├── openai_service.py
 │   │   ├── knowledge_graph_service.py / risk_service.py / dashboard_service.py
 │   │   ├── scanner_service.py / nmap_service.py / socket_scanner.py / scanner/
 │   │   ├── dvwa_service.py / nvd_sync_service.py / report_service.py
@@ -158,7 +155,7 @@ WebSecLab/
 │   ├── init_vulnerability.py  # 漏洞种子数据
 │   ├── init_experiment.py     # 实验种子数据
 │   ├── migrate_add_*.py       # 历史库增量迁移脚本
-│   └── test_*.py              # 功能自测脚本 (nmap/ollama/ai/phase6)
+│   └── test_*.py              # 功能自测脚本 (nmap/ai/phase6)
 ├── tests/                     # pytest 测试套件 (213 用例)
 ├── reports/                   # 生成的 PDF 报告输出
 ├── logs/                      # 运行日志
@@ -183,14 +180,10 @@ WebSecLab/
 
 ## AI 分析配置
 
-AI 分析是平台核心能力之一，支持两种接入方式：
+AI 分析是平台核心能力之一，统一使用 OpenAI 兼容 API（DeepSeek / DashScope / OpenAI 等）：
 
-1. **本地 Ollama**（默认，无需外网）
-   - 安装并启动 Ollama，拉取模型（如 `qwen2.5`、`llama3`）
-   - `.env` 设置 `LLM_MODE=ollama`
-2. **云端 API**
-   - `.env` 设置 `LLM_MODE=api`、`LLM_API_PROVIDER=deepseek|dashscope|openai`、`LLM_API_KEY=...`
-   - 可选 `LLM_API_BASE_URL` / `LLM_API_MODEL` 指定私有化地址与模型
+- **用户级配置（推荐）**：登录后进入「个人中心 → AI 引擎配置」，填写 API Key（可选提供商 / Base URL / 模型），保存后即可使用 AI 分析。API Key 加密存储，仅本人可见。
+- **全局配置（兜底）**：`.env` 设置 `LLM_API_PROVIDER=deepseek|dashscope|openai`、`LLM_API_KEY=...`；可选 `LLM_API_BASE_URL` / `LLM_API_MODEL` 指定私有化地址与模型。用户未配置时回退全局。
 
 分析时可选择 Prompt 模板（管理员可在后台增改模板），并自动通过 ChromaDB 检索相关漏洞知识做 RAG 增强。
 

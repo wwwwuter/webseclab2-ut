@@ -6,21 +6,21 @@
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h2><i class="bi bi-robot"></i> AI智能分析</h2>
             <div>
-                {% if ollama_available %}
-                <span class="badge bg-success me-2"><i class="bi bi-circle-fill"></i> Ollama在线</span>
+                {% if ai_available %}
+                <span class="badge bg-success me-2"><i class="bi bi-circle-fill"></i> AI 已就绪</span>
+                {% else %}
+                <span class="badge bg-danger me-2"><i class="bi bi-circle-fill"></i> AI 未配置</span>
+                {% endif %}
                 <a href="{{ url_for('ai.ai_custom') }}" class="btn btn-outline-primary btn-sm">
                     <i class="bi bi-pencil-square"></i> 自定义分析
                 </a>
-                {% else %}
-                <span class="badge bg-danger me-2"><i class="bi bi-circle-fill"></i> Ollama离线</span>
-                {% endif %}
             </div>
         </div>
 
-        {% if not ollama_available %}
+        {% if not ai_available %}
         <div class="alert alert-warning">
             <i class="bi bi-exclamation-triangle"></i>
-            Ollama服务未启动。请先安装并启动: <code>ollama serve</code>，然后安装模型: <code>ollama pull qwen2.5</code>
+            尚未配置 AI 引擎。请到 <a href="{{ url_for('profile.index') }}" class="alert-link">个人中心 → AI 引擎配置</a> 填写 API Key，保存后即可使用 AI 分析。
         </div>
         {% endif %}
 

@@ -1,6 +1,6 @@
 """
 AI分析结果模型模块
-定义AIAnalysis表，存储Ollama大模型的漏洞分析结果
+定义AIAnalysis表，存储大模型(AI)的漏洞分析结果
 关系: User 1:N AIAnalysis, Experiment 1:N, ScanTask 1:N, Vulnerability 1:N
 """
 

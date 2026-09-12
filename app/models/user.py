@@ -32,7 +32,8 @@ class User(UserMixin, db.Model):
     nickname = db.Column(db.String(64), nullable=True)
 
     # ==================== 用户独立 LLM 配置 (可选, 未配置时回退全局) ====================
-    # 模式: ollama / api; None 表示用全局配置
+    # 历史遗留列 (已废弃): AI 已统一为 OpenAI 兼容 API, 不再用该列判断是否配置,
+    # 仅保留列以避免数据库迁移; 是否配置由 密钥/provider/base_url/model 任一非空判定
     llm_mode = db.Column(db.String(16), nullable=True)
     # 提供商: deepseek / dashscope / openai / 自定义
     llm_api_provider = db.Column(db.String(32), nullable=True)

@@ -43,8 +43,7 @@ class BaseConfig:
     # 生产部署请设置环境变量 SESSION_COOKIE_SECURE=true。
     SESSION_COOKIE_SECURE = os.environ.get('SESSION_COOKIE_SECURE', 'false').lower() in ('1', 'true', 'yes', 'on')
 
-    # LLM 配置: ollama (本地) 或 api (云端)
-    LLM_MODE = os.environ.get('LLM_MODE', 'ollama')  # 'ollama' 或 'api'
+    # LLM 配置: 统一使用 OpenAI 兼容 API (用户可在「个人中心」配置自己的 API Key)
     LLM_API_PROVIDER = os.environ.get('LLM_API_PROVIDER', 'deepseek')  # deepseek/dashscope/openai
     LLM_API_KEY = os.environ.get('LLM_API_KEY', '')
     LLM_API_BASE_URL = os.environ.get('LLM_API_BASE_URL', '')  # 留空则用提供商默认

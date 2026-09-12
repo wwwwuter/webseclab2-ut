@@ -254,7 +254,6 @@
     /* =========================================================
        AI 引擎配置（用户独立）
        ========================================================= */
-    var aiMode = document.getElementById('ai-mode');
     var aiProvider = document.getElementById('ai-provider');
     var aiApiKey = document.getElementById('ai-api-key');
     var aiBaseUrl = document.getElementById('ai-base-url');
@@ -270,7 +269,6 @@
             .then(function (res) {
                 if (!res.ok) return;
                 var c = res.config || {};
-                aiMode.value = c.mode || '';
                 aiProvider.value = c.provider || '';
                 aiBaseUrl.value = c.base_url || '';
                 aiModel.value = c.model || '';
@@ -291,11 +289,8 @@
 
     if (aiSave) {
         aiSave.addEventListener('click', function () {
-            var mode = aiMode.value;
-            if (!mode) { notify('请选择模式', 'warning'); return; }
             spin(aiSave, true, '保存中...');
             postJSON('/profile/api/ai-config', {
-                mode: mode,
                 provider: aiProvider.value,
                 api_key: aiApiKey.value,
                 base_url: aiBaseUrl.value,
@@ -326,5 +321,5 @@
         });
     }
 
-    if (aiMode) loadAiConfig();
+    if (aiProvider) loadAiConfig();
 })();

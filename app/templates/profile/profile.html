@@ -111,18 +111,10 @@
         </div>
         <div class="card-body">
             <div class="form-text mb-3">
-                配置你自己的 AI 引擎（API Key 加密存储，仅你可见）。未配置时使用系统全局配置。
+                配置你自己的 AI 引擎（API Key 加密存储，仅你可见）。填写 API Key 并保存后即可使用 AI 分析；未配置时使用系统全局配置。
             </div>
             <div class="row g-3">
-                <div class="col-md-4">
-                    <label class="form-label">模式</label>
-                    <select class="form-select" id="ai-mode">
-                        <option value="">使用全局配置</option>
-                        <option value="ollama">本地 Ollama</option>
-                        <option value="api">云端 API</option>
-                    </select>
-                </div>
-                <div class="col-md-4">
+                <div class="col-md-6">
                     <label class="form-label">提供商</label>
                     <select class="form-select" id="ai-provider">
                         <option value="">默认</option>
@@ -132,7 +124,7 @@
                         <option value="custom">自定义</option>
                     </select>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-6">
                     <label class="form-label">API Key</label>
                     <input type="password" class="form-control" id="ai-api-key" placeholder="sk-..." autocomplete="off">
                     <div class="form-text" id="ai-key-hint"></div>

@@ -5,8 +5,8 @@
 探测的组件 (按设计文档顺序):
 - DVWA:        HTTP 探活 (可配置 DVWA_BASE_URL)
 - Metasploit:  TCP 探活 (可配置 METASPLOIT_RPC_HOST/PORT, 平台未直接集成, 仅测连通性)
-- AI 引擎:     AI 分析能力就绪判定 —— 本地 Ollama 可达 (LLM_MODE=ollama) 或
-              云端 API 已配置密钥 (LLM_MODE=api 且 LLM_API_KEY 非空) 任一满足即在线
+- AI 引擎:     AI 分析能力就绪判定 —— 已配置 OpenAI 兼容 API Key (LLM_API_KEY 非空) 即在线
+             (用户也可在「个人中心」配置自己的 API Key)
 - Nmap:        NmapScanner.is_available() (扫描器二进制是否可用)
 - 数据库:      SQLAlchemy 探活 (SELECT 1)
 
@@ -22,7 +22,6 @@ from sqlalchemy import text
 
 from app.extensions import db
 from app.services.nmap_service import NmapScanner
-from app.services.ollama_service import OllamaService
 
 # 模块级缓存: {time: 时间戳, data: 上次探测结果}
 _cache = {'time': 0.0, 'data': None}
@@ -128,35 +127,13 @@ class SystemStatusService:
         """
         AI 分析能力就绪判定。
 
-        平台 AI 分两种后端:
-        - LLM_MODE=ollama: 依赖本地 Ollama 服务
-        - LLM_MODE=api:    依赖云端 API (DeepSeek/DashScope/OpenAI), 需配置密钥
-
-        只要其一连通即视为可用 (绿灯):
-        - 本地 Ollama 可达  -> 'Ollama Running'
-        - API 模式且已配置密钥 -> 'API Connected'
-        - 两者皆可用        -> 'Ready'
-        都不通 -> 'Unavailable' (红)
+        AI 统一使用 OpenAI 兼容 API (DeepSeek/DashScope/OpenAI), 配置 API Key 即可用。
+        全局 (LLM_API_KEY) 已配置密钥即视为就绪 (绿灯):
+        - 已配置密钥 -> 'API Connected'
+        - 未配置密钥 -> 'Unavailable' (红)
         """
-        mode = self._cfg('LLM_MODE', 'ollama')
-        ollama_ok = False
-        try:
-            ollama_ok = OllamaService().is_available()
-        except Exception:
-            ollama_ok = False
-        # 云端 API 模式: 配了密钥即认为可用 (真实连通性由调用时保证)
-        api_ok = bool(mode == 'api' and self._cfg('LLM_API_KEY', ''))
-
-        available = ollama_ok or api_ok
-        if available:
-            if ollama_ok and api_ok:
-                detail = 'Ready'
-            elif ollama_ok:
-                detail = 'Ollama Running'
-            else:
-                detail = 'API Connected'
-        else:
-            detail = 'Unavailable'
+        available = bool(self._cfg('LLM_API_KEY', ''))
+        detail = 'API Connected' if available else 'Unavailable'
         return self._mk('ai', 'AI 引擎', 'online' if available else 'offline',
                         detail, detail)
 

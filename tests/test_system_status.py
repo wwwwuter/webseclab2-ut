@@ -56,7 +56,7 @@ def test_component_detail_switches_with_status(app, db, monkeypatch):
     with app.app_context():
         monkeypatch.setattr(
             SystemStatusService, '_ai',
-            lambda self: self._mk('ai', 'AI 引擎', 'online', 'Ollama Running', 'Unavailable')
+            lambda self: self._mk('ai', 'AI 引擎', 'online', 'API Connected', 'Unavailable')
         )
         monkeypatch.setattr(
             SystemStatusService, '_nmap',
@@ -65,20 +65,14 @@ def test_component_detail_switches_with_status(app, db, monkeypatch):
         data = SystemStatusService().get_status()
         by_key = {d['key']: d for d in data}
         assert by_key['ai']['status'] == 'online'
-        assert by_key['ai']['detail'] == 'Ollama Running'
+        assert by_key['ai']['detail'] == 'API Connected'
         assert by_key['nmap']['status'] == 'offline'
         assert by_key['nmap']['detail'] == 'Missing'
 
 
-def test_ai_online_via_api_mode_with_key(app, db, monkeypatch):
-    """云端 API 模式且配置了密钥: 即使本地 Ollama 未运行, AI 状态也应在线"""
+def test_ai_online_when_api_key_configured(app, db, monkeypatch):
+    """配置了 API Key: AI 状态在线"""
     with app.app_context():
-        # 模拟本地 Ollama 不可用
-        monkeypatch.setattr(
-            'app.services.system_status_service.OllamaService.is_available',
-            staticmethod(lambda: False)
-        )
-        monkeypatch.setitem(app.config, 'LLM_MODE', 'api')
         monkeypatch.setitem(app.config, 'LLM_API_KEY', 'sk-test-xxxx')
         data = SystemStatusService().get_status()
         ai = next(d for d in data if d['key'] == 'ai')
@@ -86,15 +80,9 @@ def test_ai_online_via_api_mode_with_key(app, db, monkeypatch):
         assert ai['detail'] == 'API Connected'
 
 
-def test_ai_offline_when_ollama_down_and_no_key(app, db, monkeypatch):
-    """本地 Ollama 不可用 且 (ollama 模式或 api 模式无密钥): AI 状态离线"""
+def test_ai_offline_when_no_key(app, db, monkeypatch):
+    """未配置 API Key: AI 状态离线"""
     with app.app_context():
-        monkeypatch.setattr(
-            'app.services.system_status_service.OllamaService.is_available',
-            staticmethod(lambda: False)
-        )
-        # api 模式但缺密钥
-        monkeypatch.setitem(app.config, 'LLM_MODE', 'api')
         monkeypatch.setitem(app.config, 'LLM_API_KEY', '')
         data = SystemStatusService().get_status()
         ai = next(d for d in data if d['key'] == 'ai')
